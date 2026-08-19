@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}DNS - Open-Shield{% endblock %}
+{% block content %}
+<h1>DNS zones</h1>
+<p>One zone per domain, served by the built-in PowerDNS server. Add a domain first under <a href="/domains">Domains</a>.</p>
+<table>
+  <thead><tr><th>Zone</th><th></th></tr></thead>
+  <tbody>
+    {% for d in domains %}
+    <tr><td>{{ d.name }}</td><td><a href="/dns/{{ d.id }}">Manage records &rarr;</a></td></tr>
+    {% else %}
+    <tr><td colspan="2"><em>No domains yet.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

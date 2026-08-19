@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}WAF - Open-Shield{% endblock %}
+{% block content %}
+<h1>WAF</h1>
+
+<h3>Rules</h3>
+<table>
+  <thead><tr><th>Name</th><th>Scope</th><th>Target</th><th>Match</th><th>Value</th><th>Action</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for r in rules %}
+    <tr>
+      <td>{{ r.name }}</td>
+      <td>{{ r.domain.name if r.domain else "global" }}</td>
+      <td>{{ r.target }}{% if r.header_name %} ({{ r.header_name }}){% endif %}</td>
+      <td>{{ r.match_type }}</td>
+      <td><code class="wrap">{{ r.value }}</code></td>
+      <td>{% if r.action == "block" %}<span class="badge badge-block">block</span>{% else %}<span class="badge badge-log">log</span>{% endif %}</td>
+      <td>{% if r.enabled %}<span class="badge badge-on">enabled</span>{% else %}<span class="badge badge-off">disabled</span>{% endif %}</td>
+      <td style="white-space:nowrap">
+        <form method="post" action="/waf/rules/{{ r.id }}/toggle" style="display:inline">
+          <button type="submit" class="secondary outline" style="padding: 0.2rem 0.6rem;">{% if r.enabled %}Disable{% else %}Enable{% endif %}</button>
+        </form>
+        <form method="post" action="/waf/rules/{{ r.id }}/delete" style="display:inline" onsubmit="return confirm('Delete rule {{ r.name }}?');">
+          <button type="submit" class="secondary outline" style="padding: 0.2rem 0.6rem;">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8"><em>No rules yet.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<details>
+  <summary role="button" class="outline">+ Add rule</summary>
+  <form method="post" action="/waf/rules/new">
+    <div class="grid">
+      <label for="rule_name">Rule name
+        <input type="text" id="rule_name" name="name" placeholder="Block sqlmap UA" required>
+      </label>
+      <label for="rule_domain">Scope
+        <select id="rule_domain" name="domain_id">
+          <option value="">Global (all domains)</option>
+          {% for d in domains %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label for="rule_action">Action
+        <select id="rule_action" name="action">
+          {% for a in actions %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="grid">
+      <label for="rule_target">Target
+        <select id="rule_target" name="target">
+          {% for t in targets %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </label>
+      <label for="rule_header_name">Header name (only if target = header)
+        <input type="text" id="rule_header_name" name="header_name" placeholder="User-Agent">
+      </label>
+      <label for="rule_match_type">Match type
+        <select id="rule_match_type" name="match_type">
+          {% for m in match_types %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <label for="rule_value">Value / pattern
+      <input type="text" id="rule_value" name="value" placeholder="sqlmap" required>
+    </label>
+    <button type="submit">Create rule</button>
+  </form>
+</details>
+
+<h3 style="margin-top: 2rem">Blocked IPs / CIDRs</h3>
+<table>
+  <thead><tr><th>IP / CIDR</th><th>Scope</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+    {% for ip in blocked_ips %}
+    <tr>
+      <td>{{ ip.ip_or_cidr }}</td>
+      <td>{{ ip.domain.name if ip.domain else "global" }}</td>
+      <td>{{ ip.note or "" }}</td>
+      <td>
+        <form method="post" action="/waf/ips/{{ ip.id }}/delete" onsubmit="return confirm('Unblock {{ ip.ip_or_cidr }}?');">
+          <button type="submit" class="secondary outline" style="padding: 0.2rem 0.6rem;">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4"><em>No IPs blocked.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<details>
+  <summary role="button" class="outline">+ Block an IP or CIDR</summary>
+  <form method="post" action="/waf/ips/new">
+    <div class="grid">
+      <label for="ip_value">IP or CIDR
+        <input type="text" id="ip_value" name="ip_or_cidr" placeholder="203.0.113.7 or 203.0.113.0/24" required>
+      </label>
+      <label for="ip_domain">Scope
+        <select id="ip_domain" name="domain_id">
+          <option value="">Global (all domains)</option>
+          {% for d in domains %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label for="ip_note">Note
+        <input type="text" id="ip_note" name="note" placeholder="optional">
+      </label>
+    </div>
+    <button type="submit">Block</button>
+  </form>
+</details>
+{% endblock %}

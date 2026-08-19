@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Domains - Open-Shield{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center;">
+  <h1>Domains</h1>
+  <a href="/domains/new" role="button">+ Add domain</a>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Domain</th><th>Origin</th><th>Proxy</th><th>WAF</th><th>Cache</th><th>Rate limit</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for d in domains %}
+    <tr>
+      <td><strong>{{ d.name }}</strong></td>
+      <td>{{ d.origin_scheme }}://{{ d.origin_host }}:{{ d.origin_port }}</td>
+      <td>{% if d.proxied %}<span class="badge badge-on">proxied</span>{% else %}<span class="badge badge-off">dns only</span>{% endif %}</td>
+      <td>{% if d.waf_enabled %}<span class="badge badge-on">on</span>{% else %}<span class="badge badge-off">off</span>{% endif %}</td>
+      <td>{% if d.cache_enabled %}{{ d.cache_ttl_seconds }}s{% else %}<span class="badge badge-off">off</span>{% endif %}</td>
+      <td>{% if d.rate_limit_enabled %}{{ d.rate_limit_requests }}/{{ d.rate_limit_window_seconds }}s{% else %}<span class="badge badge-off">off</span>{% endif %}</td>
+      <td style="white-space:nowrap">
+        <a href="/domains/{{ d.id }}/edit">Edit</a>
+        &middot;
+        <a href="/dns/{{ d.id }}">DNS</a>
+        &middot;
+        <form method="post" action="/domains/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ d.name }}? This does not delete its DNS zone.');">
+          <button type="submit" class="secondary outline" style="padding: 0.2rem 0.6rem;">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7"><em>No domains yet. Add one to start proxying and protecting it.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

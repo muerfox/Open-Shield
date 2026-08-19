@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{% if domain %}Edit{% else %}Add{% endif %} domain - Open-Shield{% endblock %}
+{% block content %}
+<h1>{% if domain %}Edit {{ domain.name }}{% else %}Add domain{% endif %}</h1>
+{% if error %}<p style="color:#e05555">{{ error }}</p>{% endif %}
+
+<form method="post" action="{% if domain %}/domains/{{ domain.id }}/edit{% else %}/domains/new{% endif %}">
+  {% if not domain %}
+  <label for="name">Domain name
+    <input type="text" id="name" name="name" placeholder="example.com" required>
+  </label>
+  {% endif %}
+
+  <div class="grid">
+    <label for="origin_scheme">Origin scheme
+      <select id="origin_scheme" name="origin_scheme">
+        <option value="http" {% if domain and domain.origin_scheme == "http" %}selected{% endif %}>http</option>
+        <option value="https" {% if domain and domain.origin_scheme == "https" %}selected{% endif %}>https</option>
+      </select>
+    </label>
+    <label for="origin_host">Origin host
+      <input type="text" id="origin_host" name="origin_host" placeholder="10.0.0.5 or backend.internal"
+             value="{{ domain.origin_host if domain else '' }}" required>
+    </label>
+    <label for="origin_port">Origin port
+      <input type="number" id="origin_port" name="origin_port" value="{{ domain.origin_port if domain else 80 }}" required>
+    </label>
+  </div>
+
+  <fieldset class="grid">
+    <label>
+      <input type="checkbox" name="proxied" {% if not domain or domain.proxied %}checked{% endif %}>
+      Proxy through Open-Shield (CDN + WAF)
+    </label>
+    <label>
+      <input type="checkbox" name="waf_enabled" {% if not domain or domain.waf_enabled %}checked{% endif %}>
+      Enable WAF
+    </label>
+  </fieldset>
+
+  <fieldset class="grid">
+    <label>
+      <input type="checkbox" name="cache_enabled" {% if domain and domain.cache_enabled %}checked{% endif %}>
+      Enable caching
+    </label>
+    <label for="cache_ttl_seconds">Cache TTL (seconds)
+      <input type="number" id="cache_ttl_seconds" name="cache_ttl_seconds" value="{{ domain.cache_ttl_seconds if domain else 60 }}">
+    </label>
+  </fieldset>
+
+  <fieldset class="grid">
+    <label>
+      <input type="checkbox" name="rate_limit_enabled" {% if domain and domain.rate_limit_enabled %}checked{% endif %}>
+      Enable rate limiting
+    </label>
+    <label for="rate_limit_requests">Max requests
+      <input type="number" id="rate_limit_requests" name="rate_limit_requests" value="{{ domain.rate_limit_requests if domain else 100 }}">
+    </label>
+    <label for="rate_limit_window_seconds">Per window (seconds)
+      <input type="number" id="rate_limit_window_seconds" name="rate_limit_window_seconds" value="{{ domain.rate_limit_window_seconds if domain else 10 }}">
+    </label>
+  </fieldset>
+
+  <button type="submit">{% if domain %}Save{% else %}Add domain{% endif %}</button>
+  <a href="/domains" role="button" class="secondary outline">Cancel</a>
+</form>
+{% endblock %}

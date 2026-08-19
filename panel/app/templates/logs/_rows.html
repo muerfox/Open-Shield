@@ -1,0 +1,15 @@
+{% for e in events %}
+<tr>
+  <td>{{ e.ts | timestamp }}</td>
+  <td>{{ e.domain or "-" }}</td>
+  <td>{{ e.ip or "-" }}</td>
+  <td>
+    {% if e.action == "block" %}<span class="badge badge-block">block</span>
+    {% elif e.action == "log" %}<span class="badge badge-log">log</span>
+    {% else %}{{ e.action }}{% endif %}
+  </td>
+  <td><code class="wrap">{{ e.reason or "" }}</code></td>
+</tr>
+{% else %}
+<tr><td colspan="5"><em>No WAF events yet.</em></td></tr>
+{% endfor %}

@@ -1,0 +1,120 @@
+name: open-shield
+
+networks:
+  openshield:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - openshield
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redisdata:/data
+    networks:
+      - openshield
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  powerdns:
+    image: pschiffe/pdns-pgsql:alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PDNS_launch: gpgsql
+      PDNS_gpgsql_host: postgres
+      PDNS_gpgsql_port: "5432"
+      PDNS_gpgsql_user: ${POSTGRES_USER}
+      PDNS_gpgsql_password: ${POSTGRES_PASSWORD}
+      PDNS_gpgsql_dbname: pdns
+      PDNS_api: "yes"
+      PDNS_api_key: ${PDNS_API_KEY}
+      PDNS_webserver: "yes"
+      PDNS_webserver_address: "0.0.0.0"
+      PDNS_webserver_allow_from: "0.0.0.0/0"
+      PDNS_default_ttl: "3600"
+      PDNS_version_string: "Open-Shield"
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    networks:
+      - openshield
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- --header=\"X-API-Key: ${PDNS_API_KEY}\" http://localhost:8081/api/v1/servers/localhost >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  panel:
+    build: ./panel
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      powerdns:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/panel
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      PDNS_API_URL: http://powerdns:8081/api/v1
+      PDNS_API_KEY: ${PDNS_API_KEY}
+      PDNS_DEFAULT_NS: ${PDNS_DEFAULT_NS}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      EDGE_PUBLIC_HOST: ${EDGE_PUBLIC_HOST:-}
+    ports:
+      - "8080:8080"
+    networks:
+      - openshield
+
+  openresty:
+    build: ./openresty
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - openshield
+
+  demo-origin:
+    image: traefik/whoami
+    restart: unless-stopped
+    profiles: ["demo"]
+    networks:
+      - openshield

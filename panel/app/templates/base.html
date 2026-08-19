@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Open-Shield{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { padding-bottom: 3rem; }
+    nav.container-fluid { border-bottom: 1px solid var(--pico-muted-border-color); margin-bottom: 2rem; padding-top: 1rem; padding-bottom: 1rem; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.4rem; font-size: 0.8rem; }
+    .badge-on { background: #1f7a4d; color: #fff; }
+    .badge-off { background: #555; color: #ddd; }
+    .badge-block { background: #8a1f1f; color: #fff; }
+    .badge-log { background: #8a6d1f; color: #fff; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+    .stat-card { text-align: center; padding: 1.25rem; }
+    .stat-card h2 { margin: 0; font-size: 2rem; }
+    .stat-card p { margin: 0; color: var(--pico-muted-color); }
+    table.compact td, table.compact th { padding: 0.4rem 0.6rem; }
+    code.wrap { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  {% if user %}
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>&#128737; Open-Shield</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/domains">Domains</a></li>
+      <li><a href="/dns">DNS</a></li>
+      <li><a href="/waf">WAF</a></li>
+      <li><a href="/logs">Logs</a></li>
+    </ul>
+    <ul>
+      <li>{{ user.email }}</li>
+      <li>
+        <form method="post" action="/logout" style="margin:0">
+          <button type="submit" class="secondary outline">Logout</button>
+        </form>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ domain.name }} - DNS - Open-Shield{% endblock %}
+{% block content %}
+<p><a href="/dns">&larr; All zones</a></p>
+<h1>{{ domain.name }}</h1>
+{% if error %}<p style="color:#e05555">{{ error }}</p>{% endif %}
+
+<table>
+  <thead><tr><th>Name</th><th>Type</th><th>TTL</th><th>Content</th><th></th></tr></thead>
+  <tbody>
+    {% for rr in rrsets %}
+    <tr>
+      <td>{{ rr.name }}</td>
+      <td>{{ rr.type }}</td>
+      <td>{{ rr.ttl }}</td>
+      <td><code class="wrap">{{ rr.records | map(attribute="content") | join("\n") }}</code></td>
+      <td>
+        {% if rr.type != "SOA" %}
+        <form method="post" action="/dns/{{ domain.id }}/records/delete" onsubmit="return confirm('Delete this {{ rr.type }} record?');">
+          <input type="hidden" name="name" value="{{ rr.name }}">
+          <input type="hidden" name="type" value="{{ rr.type }}">
+          <button type="submit" class="secondary outline" style="padding: 0.2rem 0.6rem;">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>Add / replace record</h3>
+<p><small>Adding a record with the same name + type replaces its existing values.</small></p>
+<form method="post" action="/dns/{{ domain.id }}/records">
+  <div class="grid">
+    <label for="name">Name
+      <input type="text" id="name" name="name" placeholder="www (or leave blank for apex)">
+    </label>
+    <label for="type">Type
+      <select id="type" name="type">
+        {% for t in record_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label for="ttl">TTL
+      <input type="number" id="ttl" name="ttl" value="3600">
+    </label>
+    <label for="priority">Priority (MX only)
+      <input type="number" id="priority" name="priority">
+    </label>
+  </div>
+  <label for="contents">Value(s) &mdash; one per line
+    <textarea id="contents" name="contents" rows="3" placeholder="192.0.2.10"></textarea>
+  </label>
+  <button type="submit">Save record</button>
+</form>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Logs - Open-Shield{% endblock %}
+{% block content %}
+<h1>WAF logs</h1>
+<p>Live feed of the most recent block/log events (auto-refreshes every 5s).</p>
+<table class="compact">
+  <thead>
+    <tr><th>Time</th><th>Domain</th><th>IP</th><th>Action</th><th>Reason</th></tr>
+  </thead>
+  <tbody hx-get="/logs/partial" hx-trigger="every 5s" hx-swap="innerHTML">
+    {% include "logs/_rows.html" %}
+  </tbody>
+</table>
+{% endblock %}

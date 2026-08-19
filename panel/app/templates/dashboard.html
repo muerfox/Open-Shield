@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Open-Shield{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="stat-grid">
+  <article class="stat-card"><h2>{{ domain_count }}</h2><p>Domains</p></article>
+  <article class="stat-card"><h2>{{ active_rule_count }}</h2><p>Active WAF rules</p></article>
+  <article class="stat-card"><h2>{{ blocked_ip_count }}</h2><p>Blocked IPs</p></article>
+  <article class="stat-card"><h2>{{ blocks_today }}</h2><p>Blocked today</p></article>
+</div>
+
+<h3 style="margin-top: 2rem">Recent WAF events</h3>
+<table class="compact">
+  <thead>
+    <tr><th>Time</th><th>Domain</th><th>IP</th><th>Action</th><th>Reason</th></tr>
+  </thead>
+  <tbody hx-get="/logs/partial" hx-trigger="every 5s" hx-swap="innerHTML">
+    {% set events = recent_events %}
+    {% include "logs/_rows.html" %}
+  </tbody>
+</table>
+<p><a href="/logs">View full log &rarr;</a></p>
+{% endblock %}
