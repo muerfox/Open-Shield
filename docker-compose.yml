@@ -70,7 +70,10 @@ services:
     networks:
       - openshield
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- --header=\"X-API-Key: ${PDNS_API_KEY}\" http://localhost:8081/api/v1/servers/localhost >/dev/null"]
+      # The image is built from bare alpine + only PowerDNS packages — no
+      # wget/curl — so use its own control-socket ping instead of an HTTP
+      # check.
+      test: ["CMD", "pdns_control", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20
