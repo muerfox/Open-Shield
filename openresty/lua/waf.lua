@@ -5,6 +5,7 @@
 
 local cjson = require "cjson.safe"
 local redis_client = require "redis_client"
+local error_page = require "error_page"
 
 local _M = {}
 
@@ -33,12 +34,12 @@ local function log_event(red, cfg, ip, action, reason)
 end
 
 local function deny(red, cfg, ip, status, reason)
+    -- `reason` (matched rule name/pattern) is logged for the admin's Logs
+    -- page but deliberately never shown on the public page — that would
+    -- hand an attacker a debugging oracle for refining their bypass.
     log_event(red, cfg, ip, "block", reason)
     redis_client.release(red)
-    ngx.status = status
-    ngx.header["Content-Type"] = "text/plain"
-    ngx.say("Blocked by Open-Shield WAF")
-    ngx.exit(status)
+    return error_page.render(status)
 end
 
 -- ---- IPv4 CIDR matching -------------------------------------------------

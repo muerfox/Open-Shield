@@ -5,16 +5,14 @@
 
 local router = require "router"
 local waf = require "waf"
+local error_page = require "error_page"
 
 local _M = {}
 
 function _M.handle(is_https)
     local cfg = router.resolve(ngx.var.host)
     if not cfg or not cfg.proxied then
-        ngx.status = 404
-        ngx.header["Content-Type"] = "text/plain"
-        ngx.say("Unknown domain")
-        return ngx.exit(404)
+        return error_page.render(404)
     end
 
     if not is_https and cfg.ssl_mode ~= "off" then

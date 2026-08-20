@@ -27,6 +27,7 @@ request.
 - 🔐 **Brute-force-hardened login** — escalating lockout (doubling up to 24h) on the panel itself.
 - 📴 **Builds offline** — every Python/Lua dependency is vendored and hash-verified; `docker build` never touches PyPI, GitHub, or luarocks.org.
 - 📊 **Live dashboard** — recent WAF events, block counts, all polling live via HTMX.
+- 🎨 **Branded error pages** — WAF blocks, rate limits, unknown domains, and origin-down errors all get a custom dark-themed Open-Shield page (never a real origin's own 4xx/5xx, which always pass through untouched).
 
 ## Quick start
 
