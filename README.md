@@ -24,7 +24,7 @@ request.
 - ⚡ **Zero-reload config** — the panel pushes every change straight to Redis; OpenResty's Lua reads it on the next request. No nginx reload, ever, for a domain/rule/IP change.
 - 🔒 **Three HTTPS modes per domain** — plain HTTP (no cert hassle), automatic Let's Encrypt, or paste your own certificate.
 - 🖥️ **Ingress mode** — run it as the public front door on a real server: real client IPs, `proxy_pass` straight to anything else you've published to `127.0.0.1` on the same box.
-- 🔐 **Brute-force-hardened login** — escalating lockout (doubling up to 24h) on the panel itself, plus edge-level rate limiting in front of it.
+- 🔐 **Brute-force-hardened login** — escalating lockout (doubling up to 24h) on the panel itself.
 - 📴 **Builds offline** — every Python/Lua dependency is vendored and hash-verified; `docker build` never touches PyPI, GitHub, or luarocks.org.
 - 📊 **Live dashboard** — recent WAF events, block counts, all polling live via HTMX.
 
@@ -176,12 +176,6 @@ violation** up to `LOGIN_LOCKOUT_MAX_SECONDS` (default 24h capped). A
 successful login clears both the failure count and the escalation level.
 Tracked in Redis, so it survives a panel restart. Tune via those env vars
 (see `.env.example`) if the defaults are too strict/loose for you.
-
-On top of that, `openresty` (the same edge that fronts your domains) also
-fronts port 8080 with plain nginx rate limiting — a tight 5-requests-per-
-minute zone specifically on `/login`, and a generous general zone for
-everything else — so the app never even sees a credential-stuffing flood in
-the first place. See `openresty/conf.d/panel.conf`.
 
 Beyond that: use a real random `ADMIN_PASSWORD`/`SESSION_SECRET`, and
 consider firewalling port 8080 to a trusted network/VPN if you don't need
