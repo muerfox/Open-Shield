@@ -43,7 +43,7 @@ struct sockaddr_in addr_in;
 char *socket_path;
 char *pid_file;
 
-void proc_exit() {}
+void proc_exit(int sig) {}
 
 struct buffer_chain_t* read_pipe(int fd)
 {
