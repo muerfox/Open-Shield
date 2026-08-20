@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -12,6 +14,7 @@ from ..redis_sync import delete_domain, push_domain_and_rules
 from ..templating import templates
 
 router = APIRouter(prefix="/domains")
+logger = logging.getLogger(__name__)
 
 
 def _get_domain_or_404(db: Session, domain_id: int) -> Domain:
@@ -22,14 +25,22 @@ def _get_domain_or_404(db: Session, domain_id: int) -> Domain:
 
 
 def _apply_dns_for_proxy(domain: Domain) -> None:
-    """Ensure a PowerDNS zone exists for the domain, and if proxying is on,
-    point its apex A record at the Open-Shield edge."""
-    settings = get_settings()
-    zone = powerdns_client.get_zone(domain.name)
-    if zone is None:
-        powerdns_client.create_zone(domain.name, settings.pdns_default_ns)
-    if domain.proxied and settings.edge_public_host:
-        powerdns_client.set_proxied_a_record(domain.name, settings.edge_public_host)
+    """Best-effort: ensure a PowerDNS zone exists for the domain, and if
+    proxying is on, point its apex A record at the Open-Shield edge.
+
+    DNS/PowerDNS being unreachable or misconfigured must never block the
+    Redis sync that makes the domain live on the CDN/WAF edge — that's the
+    critical path, this is secondary. Failures are logged, not raised.
+    """
+    try:
+        settings = get_settings()
+        zone = powerdns_client.get_zone(domain.name)
+        if zone is None:
+            powerdns_client.create_zone(domain.name, settings.pdns_default_ns)
+        if domain.proxied and settings.edge_public_host:
+            powerdns_client.set_proxied_a_record(domain.name, settings.edge_public_host)
+    except Exception:
+        logger.exception("DNS setup failed for domain %s (edge routing is unaffected)", domain.name)
 
 
 def _validate_ssl(ssl_mode: str, ssl_cert: str, ssl_key: str) -> str | None:
@@ -126,8 +137,8 @@ def create_domain(
     db.commit()
     db.refresh(domain)
 
-    _apply_dns_for_proxy(domain)
     push_domain_and_rules(db, domain)
+    _apply_dns_for_proxy(domain)
 
     return RedirectResponse("/domains", status_code=303)
 
@@ -185,8 +196,8 @@ def update_domain(
     db.commit()
     db.refresh(domain)
 
-    _apply_dns_for_proxy(domain)
     push_domain_and_rules(db, domain)
+    _apply_dns_for_proxy(domain)
 
     return RedirectResponse("/domains", status_code=303)
 
