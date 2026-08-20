@@ -108,13 +108,10 @@ services:
       LOGIN_LOCKOUT_BASE_SECONDS: ${LOGIN_LOCKOUT_BASE_SECONDS:-3600}
       LOGIN_LOCKOUT_MAX_SECONDS: ${LOGIN_LOCKOUT_MAX_SECONDS:-86400}
     ports:
-      # Loopback-only, and on a *different* host port (8090, not 8080):
-      # openresty (below) is the actual public entry point for 8080 now,
-      # binding it directly on the host (network_mode: host) — a bind to
-      # 127.0.0.1:8080 here would conflict with that wildcard 0.0.0.0:8080
-      # bind (you can't hold both a specific-interface and a wildcard bind
-      # on the same port). Not reachable at all from outside this machine.
-      - "127.0.0.1:8090:8080"
+      # Loopback-only: openresty (below) is the actual public entry point
+      # for 8080 too now, so it can rate-limit it. Not reachable directly
+      # from outside this machine.
+      - "127.0.0.1:8080:8080"
     networks:
       - openshield
     # (healthcheck comes from panel/Dockerfile's own HEALTHCHECK)
