@@ -18,7 +18,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgres/00-create-user-db.sh:/docker-entrypoint-initdb.d/00-create-user-db.sh:ro
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     networks:
       - openshield
     healthcheck:
