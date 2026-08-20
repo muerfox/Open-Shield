@@ -3,6 +3,11 @@
 # domain and set $upstream_* / $no_cache.
 
 header_filter_by_lua_block {
+    -- Assigning ngx.header replaces the header outright (unlike add_header,
+    -- which would leave nginx's own "Server: openresty/..." in place
+    -- alongside a second one).
+    ngx.header["Server"] = "OpenShield"
+
     local cfg = ngx.ctx.domain_cfg
     if cfg and cfg.cache_enabled then
         ngx.header["X-Accel-Expires"] = tostring(cfg.cache_ttl)
