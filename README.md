@@ -40,8 +40,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:8080` and log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
-from your `.env`.
+Open `https://localhost:8080` and log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+from your `.env`. The panel serves HTTPS with a self-signed certificate
+(see [Panel login security](#panel-login-security)) — your browser will
+warn about that on first visit; click through it (or add an exception).
 
 To try it against a local test backend instead of a real domain:
 
@@ -168,7 +170,19 @@ the edge's self-signed fallback cert is presented).
 
 ## Panel login security
 
-`/login` has brute-force lockout built in (`panel/app/login_guard.py`):
+**HTTPS by default.** uvicorn terminates TLS directly with a self-signed
+certificate generated fresh at `docker build` time (100-year validity,
+`panel/Dockerfile`) — a unique key per build, never committed to the repo.
+The session cookie is also marked `Secure`. This encrypts the connection
+so credentials/session cookies can't be sniffed in cleartext on the wire,
+even on a LAN — but it's self-signed, so it doesn't give you a trust chain
+a browser recognizes: expect a one-time browser warning, and it doesn't
+protect against an active on-path attacker presenting *their own*
+self-signed cert instead (true MITM protection needs a real CA-issued
+cert — either paste one via the CDN's manual HTTPS mode and proxy the
+panel through that, or put a real cert in front of 8080 yourself).
+
+`/login` also has brute-force lockout built in (`panel/app/login_guard.py`):
 after `LOGIN_MAX_ATTEMPTS` (default 5) failed attempts from one IP within
 `LOGIN_FAIL_WINDOW_SECONDS` (default 15 min), that IP is locked out of
 `/login` entirely — no password check even attempted — for

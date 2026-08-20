@@ -16,7 +16,15 @@ from .routers import auth, dashboard, dns, domains, logs, waf
 app = FastAPI(title="Open-Shield")
 
 settings = get_settings()
-app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    same_site="lax",
+    # The panel is HTTPS-only (uvicorn terminates TLS directly — see
+    # panel/Dockerfile), so mark the session cookie Secure too: never sent
+    # over a plaintext connection even by accident.
+    https_only=True,
+)
 
 static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
