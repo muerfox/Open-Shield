@@ -22,14 +22,10 @@ end
 
 auto_ssl:set("allow_domain", autossl_whitelist.allow_domain)
 
-local acme_email = os.getenv("ACME_EMAIL")
-if acme_email and acme_email ~= "" then
-    os.execute("mkdir -p /etc/resty-auto-ssl/letsencrypt/conf.d")
-    local f = io.open("/etc/resty-auto-ssl/letsencrypt/conf.d/contact.sh", "w")
-    if f then
-        f:write('CONTACT_EMAIL="' .. acme_email .. '"\n')
-        f:close()
-    end
-end
+-- The ACME contact email is no longer read from a static env var here —
+-- it's editable live from the panel's Settings page and kept in sync by
+-- acme_contact.lua, called right before each issuance attempt (see
+-- conf.d/edge.conf). ACME_EMAIL still exists as an env var, but only to
+-- seed that setting's initial value on the panel's first boot.
 
 auto_ssl:init()

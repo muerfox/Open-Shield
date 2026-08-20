@@ -9,9 +9,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .auth import hash_password
 from .config import get_settings
 from .db import Base, SessionLocal, engine
-from .models import AdminUser
+from .models import AdminUser, Setting
 from .redis_sync import sync_all
-from .routers import auth, dashboard, dns, domains, logs, waf
+from .routers import auth, dashboard, dns, domains, logs, settings as settings_router, waf
 
 app = FastAPI(title="Open-Shield")
 
@@ -51,6 +51,9 @@ def on_startup() -> None:
             )
             db.add(admin)
             db.commit()
+        if db.get(Setting, "acme_email") is None:
+            db.add(Setting(key="acme_email", value=settings.acme_email))
+            db.commit()
         sync_all(db)
     finally:
         db.close()
@@ -62,3 +65,4 @@ app.include_router(domains.router)
 app.include_router(dns.router)
 app.include_router(waf.router)
 app.include_router(logs.router)
+app.include_router(settings_router.router)

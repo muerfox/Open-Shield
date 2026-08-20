@@ -17,6 +17,10 @@ class Settings:
     session_secret: str = os.environ["SESSION_SECRET"]
 
     edge_public_host: str = os.environ.get("EDGE_PUBLIC_HOST", "")
+    # Only used to seed the "acme_email" Setting row on first boot — after
+    # that, the panel's Settings page (backed by Postgres, synced to Redis)
+    # is the source of truth, not this env var.
+    acme_email: str = os.environ.get("ACME_EMAIL", "")
 
     # Login brute-force protection (see login_guard.py). After
     # login_max_attempts failures from one IP within login_fail_window_seconds,

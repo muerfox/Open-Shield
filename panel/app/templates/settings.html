@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Settings - Open-Shield{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+{% if saved %}<p style="color:#3fb950">Saved.</p>{% endif %}
+{% if error %}<p style="color:#e05555">{{ error }}</p>{% endif %}
+
+<article>
+  <h3>Let's Encrypt contact email</h3>
+  <p>
+    Used when registering/renewing certificates for domains with HTTPS set
+    to <strong>Automatic</strong>. Takes effect within about a minute of
+    saving — no restart needed.
+  </p>
+  <form method="post" action="/settings">
+    <label for="acme_email">Contact email
+      <input type="email" id="acme_email" name="acme_email" placeholder="you@yourdomain.com" value="{{ acme_email }}">
+    </label>
+    <button type="submit">Save</button>
+  </form>
+</article>
+{% endblock %}

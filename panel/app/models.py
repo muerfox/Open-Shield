@@ -24,6 +24,18 @@ class WafAction(str, enum.Enum):
     log = "log"
 
 
+class Setting(Base):
+    """Simple key/value site-wide settings (e.g. the ACME contact email),
+    editable from the panel instead of requiring an env var + rebuild.
+    Synced to Redis under settings:<key> — see redis_sync.sync_settings.
+    """
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
 

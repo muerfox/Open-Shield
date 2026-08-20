@@ -10,7 +10,7 @@ import redis
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import BlockedIp, Domain, WafRule
+from .models import BlockedIp, Domain, Setting, WafRule
 
 
 @lru_cache
@@ -114,11 +114,19 @@ def sync_blocked_ips(db: Session) -> None:
             r.set(f"waf:blocked_cidrs:{scope}", json.dumps(cidr_list))
 
 
+def sync_settings(db: Session) -> None:
+    """Full rebuild of settings:<key> from Postgres."""
+    r = get_redis()
+    for setting in db.query(Setting).all():
+        r.set(f"settings:{setting.key}", setting.value)
+
+
 def sync_all(db: Session) -> None:
     for domain in db.query(Domain).all():
         sync_domain(domain)
     sync_waf_rules(db)
     sync_blocked_ips(db)
+    sync_settings(db)
 
 
 def push_domain_and_rules(db: Session, domain: Domain) -> None:

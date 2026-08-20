@@ -155,8 +155,14 @@ Each domain has its own **HTTPS** setting on the domain form:
   through the CDN/WAF immediately.
 - **Automatic** — the existing Let's Encrypt flow via `lua-resty-auto-ssl`.
   Requires `EDGE_PUBLIC_HOST` set, the domain's DNS actually pointed at this
-  server, and port 80 reachable from the public internet for the ACME
-  HTTP-01 challenge.
+  server, port 80 reachable from the public internet for the ACME HTTP-01
+  challenge, and a real contact email set on the panel's **Settings** page
+  (not on a domain like `example.com`/`.net`/`.org` — Let's Encrypt rejects
+  those with an `invalidContact` error). Settings changes take effect within
+  about a minute, no restart needed. A failed issuance attempt backs off
+  for 2 minutes before retrying (rather than retrying — and blocking — on
+  every single request), so a still-broken DNS/firewall setup won't also
+  make the site slow while you fix it.
 - **Manual** — paste your own certificate (PEM, full chain) and private key
   (PEM) directly into the domain form. OpenResty picks it up on the next TLS
   handshake — no reload needed. Leave both boxes blank on an edit to keep
