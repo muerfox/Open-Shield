@@ -48,16 +48,40 @@ domain's origin at for testing.
 ### Typical first steps in the panel
 
 1. **Domains** → *Add domain*: point it at your real origin (host/port),
-   leave "Proxy through Open-Shield" and "Enable WAF" checked.
+   leave "Proxy through Open-Shield" and "Enable WAF" checked, and pick an
+   HTTPS mode (see below — **Off** is the default and needs nothing extra).
 2. **DNS** → open the new domain's zone, add any extra records you need
    (MX, TXT, etc). The apex `A` record is managed automatically while
    proxying is on.
-3. Point your domain's nameservers at this server (`PDNS_DEFAULT_NS`) so
-   PowerDNS actually serves it, and so Let's Encrypt's HTTP-01 challenge can
-   reach the edge on port 80.
+3. If using HTTPS, point your domain's nameservers at this server
+   (`PDNS_DEFAULT_NS`) so PowerDNS actually serves it, and so Let's
+   Encrypt's HTTP-01 challenge can reach the edge on port 80.
 4. **WAF** → add a rule (e.g. block requests where the `User-Agent` header
    *contains* `sqlmap`) or block a specific IP/CIDR.
 5. **Logs** → watch blocked/logged requests roll in live.
+
+### HTTPS modes
+
+Each domain has its own **HTTPS** setting on the domain form:
+
+- **Off** (default) — served over plain HTTP only, port 80, no redirect to
+  HTTPS. No DNS/ACME/certificate setup required — this is the easiest way to
+  get a domain (or `demo-origin` for local testing) working end-to-end
+  through the CDN/WAF immediately.
+- **Automatic** — the existing Let's Encrypt flow via `lua-resty-auto-ssl`.
+  Requires `EDGE_PUBLIC_HOST` set, the domain's DNS actually pointed at this
+  server, and port 80 reachable from the public internet for the ACME
+  HTTP-01 challenge.
+- **Manual** — paste your own certificate (PEM, full chain) and private key
+  (PEM) directly into the domain form. OpenResty picks it up on the next TLS
+  handshake — no reload needed. Leave both boxes blank on an edit to keep
+  the currently stored cert.
+
+Domains with HTTPS on ("automatic" or "manual") get all plain-HTTP traffic
+301-redirected to HTTPS; domains with HTTPS "off" are served on port 80 only
+(hitting port 443 for one of these still works — the WAF/routing pipeline
+runs the same way — but you'll get a browser certificate warning, since only
+the edge's self-signed fallback cert is presented).
 
 ## Repo layout
 

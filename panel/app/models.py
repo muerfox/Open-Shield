@@ -46,6 +46,12 @@ class Domain(Base):
     proxied: Mapped[bool] = mapped_column(Boolean, default=True)
     waf_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # "off" = plain HTTP, no redirect. "auto" = Let's Encrypt via lua-resty-auto-ssl.
+    # "manual" = admin-pasted PEM cert/key (ssl_cert/ssl_key).
+    ssl_mode: Mapped[str] = mapped_column(String(16), default="off")
+    ssl_cert: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ssl_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     cache_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     cache_ttl_seconds: Mapped[int] = mapped_column(Integer, default=60)
 

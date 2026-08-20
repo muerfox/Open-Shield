@@ -32,6 +32,32 @@ def _apply_dns_for_proxy(domain: Domain) -> None:
         powerdns_client.set_proxied_a_record(domain.name, settings.edge_public_host)
 
 
+def _validate_ssl(ssl_mode: str, ssl_cert: str, ssl_key: str) -> str | None:
+    if ssl_mode not in ("off", "auto", "manual"):
+        return "Invalid SSL mode"
+    if ssl_mode == "manual":
+        if "BEGIN CERTIFICATE" not in ssl_cert:
+            return "Paste a PEM certificate (must contain 'BEGIN CERTIFICATE')"
+        if "PRIVATE KEY" not in ssl_key:
+            return "Paste a PEM private key (must contain 'BEGIN ... PRIVATE KEY')"
+    return None
+
+
+def _resolve_ssl_fields(
+    ssl_mode: str, ssl_cert: str, ssl_key: str, existing: Domain | None
+) -> tuple[str | None, str | None]:
+    """For manual mode, blank textareas on an edit mean 'keep the existing
+    cert/key' rather than wiping them out."""
+    cert = ssl_cert.strip()
+    key = ssl_key.strip()
+    if ssl_mode == "manual" and existing is not None:
+        cert = cert or existing.ssl_cert or ""
+        key = key or existing.ssl_key or ""
+    if ssl_mode != "manual":
+        return None, None
+    return cert, key
+
+
 @router.get("")
 def list_domains(request: Request, db: Session = Depends(get_db), user: AdminUser = Depends(require_login)):
     domains = db.scalars(select(Domain).order_by(Domain.name)).all()
@@ -54,6 +80,9 @@ def create_domain(
     origin_port: int = Form(80),
     proxied: bool = Form(False),
     waf_enabled: bool = Form(False),
+    ssl_mode: str = Form("off"),
+    ssl_cert: str = Form(""),
+    ssl_key: str = Form(""),
     cache_enabled: bool = Form(False),
     cache_ttl_seconds: int = Form(60),
     rate_limit_enabled: bool = Form(False),
@@ -70,6 +99,13 @@ def create_domain(
             status_code=400,
         )
 
+    resolved_cert, resolved_key = _resolve_ssl_fields(ssl_mode, ssl_cert, ssl_key, None)
+    ssl_error = _validate_ssl(ssl_mode, resolved_cert or "", resolved_key or "")
+    if ssl_error:
+        return templates.TemplateResponse(
+            request, "domains/form.html", {"user": user, "domain": None, "error": ssl_error}, status_code=400
+        )
+
     domain = Domain(
         name=name,
         origin_scheme=origin_scheme,
@@ -77,6 +113,9 @@ def create_domain(
         origin_port=origin_port,
         proxied=proxied,
         waf_enabled=waf_enabled,
+        ssl_mode=ssl_mode,
+        ssl_cert=resolved_cert,
+        ssl_key=resolved_key,
         cache_enabled=cache_enabled,
         cache_ttl_seconds=cache_ttl_seconds,
         rate_limit_enabled=rate_limit_enabled,
@@ -112,6 +151,9 @@ def update_domain(
     origin_port: int = Form(80),
     proxied: bool = Form(False),
     waf_enabled: bool = Form(False),
+    ssl_mode: str = Form("off"),
+    ssl_cert: str = Form(""),
+    ssl_key: str = Form(""),
     cache_enabled: bool = Form(False),
     cache_ttl_seconds: int = Form(60),
     rate_limit_enabled: bool = Form(False),
@@ -119,11 +161,22 @@ def update_domain(
     rate_limit_window_seconds: int = Form(10),
 ):
     domain = _get_domain_or_404(db, domain_id)
+
+    resolved_cert, resolved_key = _resolve_ssl_fields(ssl_mode, ssl_cert, ssl_key, domain)
+    ssl_error = _validate_ssl(ssl_mode, resolved_cert or "", resolved_key or "")
+    if ssl_error:
+        return templates.TemplateResponse(
+            request, "domains/form.html", {"user": user, "domain": domain, "error": ssl_error}, status_code=400
+        )
+
     domain.origin_scheme = origin_scheme
     domain.origin_host = origin_host.strip()
     domain.origin_port = origin_port
     domain.proxied = proxied
     domain.waf_enabled = waf_enabled
+    domain.ssl_mode = ssl_mode
+    domain.ssl_cert = resolved_cert
+    domain.ssl_key = resolved_key
     domain.cache_enabled = cache_enabled
     domain.cache_ttl_seconds = cache_ttl_seconds
     domain.rate_limit_enabled = rate_limit_enabled

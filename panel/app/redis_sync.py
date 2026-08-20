@@ -24,7 +24,8 @@ def _domain_key(name: str) -> str:
 
 def sync_domain(domain: Domain) -> None:
     r = get_redis()
-    key = _domain_key(domain.name)
+    name = domain.name.lower()
+    key = _domain_key(name)
     r.hset(
         key,
         mapping={
@@ -33,6 +34,7 @@ def sync_domain(domain: Domain) -> None:
             "origin_port": str(domain.origin_port),
             "proxied": "1" if domain.proxied else "0",
             "waf_enabled": "1" if domain.waf_enabled else "0",
+            "ssl_mode": domain.ssl_mode,
             "cache_enabled": "1" if domain.cache_enabled else "0",
             "cache_ttl": str(domain.cache_ttl_seconds),
             "rate_limit_enabled": "1" if domain.rate_limit_enabled else "0",
@@ -40,13 +42,23 @@ def sync_domain(domain: Domain) -> None:
             "rate_limit_window": str(domain.rate_limit_window_seconds),
         },
     )
-    r.sadd("domains:index", domain.name.lower())
+    r.sadd("domains:index", name)
+
+    cert_key = f"domain:{name}:ssl_cert"
+    priv_key = f"domain:{name}:ssl_key"
+    if domain.ssl_mode == "manual" and domain.ssl_cert and domain.ssl_key:
+        r.set(cert_key, domain.ssl_cert)
+        r.set(priv_key, domain.ssl_key)
+    else:
+        r.delete(cert_key, priv_key)
 
 
 def delete_domain(name: str) -> None:
     r = get_redis()
     name = name.lower()
     r.delete(_domain_key(name))
+    r.delete(f"domain:{name}:ssl_cert")
+    r.delete(f"domain:{name}:ssl_key")
     r.delete(f"waf:blocked_ips:{name}")
     r.delete(f"waf:blocked_cidrs:{name}")
     r.srem("domains:index", name)

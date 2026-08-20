@@ -38,6 +38,28 @@
     </label>
   </fieldset>
 
+  <div x-data="{ sslMode: '{{ domain.ssl_mode if domain else 'off' }}' }">
+    <label for="ssl_mode">HTTPS
+      <select id="ssl_mode" name="ssl_mode" x-model="sslMode">
+        <option value="off">Off (plain HTTP, no redirect)</option>
+        <option value="auto">Automatic (Let's Encrypt)</option>
+        <option value="manual">Manual (paste your own certificate)</option>
+      </select>
+    </label>
+    <div x-show="sslMode === 'auto'">
+      <small>Requires <code>EDGE_PUBLIC_HOST</code> set and this domain's nameservers/DNS pointed at this server, with port 80 reachable from the internet for the ACME challenge.</small>
+    </div>
+    <div x-show="sslMode === 'manual'" x-cloak>
+      <label for="ssl_cert">Certificate (PEM, full chain)
+        <textarea id="ssl_cert" name="ssl_cert" rows="6" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----">{{ domain.ssl_cert if domain and domain.ssl_cert else '' }}</textarea>
+      </label>
+      <label for="ssl_key">Private key (PEM)
+        <textarea id="ssl_key" name="ssl_key" rows="6" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----">{{ domain.ssl_key if domain and domain.ssl_key else '' }}</textarea>
+      </label>
+      {% if domain and domain.ssl_mode == "manual" %}<small>Leave both blank to keep the currently stored certificate.</small>{% endif %}
+    </div>
+  </div>
+
   <fieldset class="grid">
     <label>
       <input type="checkbox" name="cache_enabled" {% if domain and domain.cache_enabled %}checked{% endif %}>

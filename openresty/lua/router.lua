@@ -53,6 +53,7 @@ function _M.resolve(host)
         origin_port = tonumber(h.origin_port) or 80,
         proxied = bool(h.proxied),
         waf_enabled = bool(h.waf_enabled),
+        ssl_mode = h.ssl_mode or "off",
         cache_enabled = bool(h.cache_enabled),
         cache_ttl = tonumber(h.cache_ttl) or 60,
         rate_limit_enabled = bool(h.rate_limit_enabled),

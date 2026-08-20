@@ -8,7 +8,7 @@
 
 <table>
   <thead>
-    <tr><th>Domain</th><th>Origin</th><th>Proxy</th><th>WAF</th><th>Cache</th><th>Rate limit</th><th></th></tr>
+    <tr><th>Domain</th><th>Origin</th><th>Proxy</th><th>HTTPS</th><th>WAF</th><th>Cache</th><th>Rate limit</th><th></th></tr>
   </thead>
   <tbody>
     {% for d in domains %}
@@ -16,6 +16,11 @@
       <td><strong>{{ d.name }}</strong></td>
       <td>{{ d.origin_scheme }}://{{ d.origin_host }}:{{ d.origin_port }}</td>
       <td>{% if d.proxied %}<span class="badge badge-on">proxied</span>{% else %}<span class="badge badge-off">dns only</span>{% endif %}</td>
+      <td>
+        {% if d.ssl_mode == "auto" %}<span class="badge badge-on">auto</span>
+        {% elif d.ssl_mode == "manual" %}<span class="badge badge-on">manual</span>
+        {% else %}<span class="badge badge-off">off</span>{% endif %}
+      </td>
       <td>{% if d.waf_enabled %}<span class="badge badge-on">on</span>{% else %}<span class="badge badge-off">off</span>{% endif %}</td>
       <td>{% if d.cache_enabled %}{{ d.cache_ttl_seconds }}s{% else %}<span class="badge badge-off">off</span>{% endif %}</td>
       <td>{% if d.rate_limit_enabled %}{{ d.rate_limit_requests }}/{{ d.rate_limit_window_seconds }}s{% else %}<span class="badge badge-off">off</span>{% endif %}</td>
@@ -30,7 +35,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="7"><em>No domains yet. Add one to start proxying and protecting it.</em></td></tr>
+    <tr><td colspan="8"><em>No domains yet. Add one to start proxying and protecting it.</em></td></tr>
     {% endfor %}
   </tbody>
 </table>
