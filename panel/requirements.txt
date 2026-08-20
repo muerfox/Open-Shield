@@ -1,5 +1,8 @@
+# All of these (plus their transitive deps) are vendored as wheels under
+# ./vendor/wheels, so `docker build` installs with --no-index --find-links
+# and never hits PyPI. See vendor/wheels/VERSIONS.md.
 fastapi==0.115.6
-uvicorn[standard]==0.32.1
+uvicorn==0.32.1
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 redis==5.2.1

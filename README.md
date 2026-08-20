@@ -87,11 +87,44 @@ the edge's self-signed fallback cert is presented).
 
 ```
 panel/       FastAPI admin panel (Python)
+  vendor/wheels/   vendored pip wheels (offline build — see below)
 openresty/   Edge: nginx.conf, conf.d/, Lua modules (router, WAF, auto-ssl)
+  vendor/          vendored lua-resty-auto-ssl + its deps (offline build)
 postgres/    DB init script (creates the `panel` and `pdns` databases)
 docker-compose.yml
 .env.example
 ```
+
+## Offline builds
+
+Both Dockerfiles are built to need **no PyPI/GitHub/luarocks.org network
+access** at `docker build` time:
+
+- `panel/vendor/wheels/` has every wheel needed to satisfy
+  `panel/requirements.txt` (direct deps + full transitive closure, for both
+  `x86_64` and `aarch64`) — the Dockerfile installs with `pip install
+  --no-index --find-links=/wheels`. See `panel/vendor/wheels/VERSIONS.md`.
+- `openresty/vendor/` has `lua-resty-auto-ssl` plus everything it normally
+  fetches from GitHub/luarocks.org at build time (`lua-resty-http`,
+  `shell-games`, `dehydrated`, `lua-resty-shell`'s `shell.lua`, and the
+  `sockproc` C source) — the Dockerfile builds/installs all of it via
+  `luarocks make` against the local source, and pre-seeds the exact files
+  `lua-resty-auto-ssl`'s own `Makefile` would otherwise `curl` down. See
+  `openresty/vendor/VERSIONS.md`.
+
+What's **not** vendored, and why: each Dockerfile's own OS package install
+(`apk add ...` for Alpine, none needed anymore for the Debian-based panel
+image) still hits the base image's configured package mirror — vendoring
+raw `.apk`/`.deb` binaries into git is fragile (tightly version/arch-coupled
+to the exact base image) and something that couldn't be verified working in
+the sandbox this was built in. Pulling the base images themselves
+(`python:3.12-slim`, `openresty/openresty:...-alpine-fat`, `postgres:16-alpine`,
+`redis:7-alpine`, `pschiffe/pdns-pgsql:alpine`, `traefik/whoami`) also still
+needs network the first time — that's inherent to how Docker registries
+work and isn't something a git repo can vendor around; run `docker compose
+up --build` once with network access, and normal Docker layer caching keeps
+subsequent rebuilds offline as long as those base image layers and this
+`vendor/` content don't change.
 
 ## Known limitations / v1 scope
 
@@ -121,9 +154,15 @@ PowerDNS HTTP API docs) rather than by actually running the stack. Please
 run `docker compose up --build` and go through the quick-start steps above —
 if anything breaks, the likely trouble spots are:
 
-- The `luarocks install lua-resty-auto-ssl` step in `openresty/Dockerfile`
-  (native build step).
+- The vendored `luarocks make` build chain in `openresty/Dockerfile`
+  (`openresty/vendor/`) — in particular the `sockproc` C compile and the
+  "stamp file" trick that makes `lua-resty-auto-ssl`'s `Makefile` skip its
+  normal network fetches.
 - Exact PowerDNS env var behavior in `pschiffe/pdns-pgsql` (zone
   auto-creation, `webserver-allow-from`).
 - `ssl_certificate_by_lua_block` / ACME flow, which needs port 80 reachable
   from the public internet to actually issue certificates.
+- The vendored wheel set in `panel/vendor/wheels/` — if `pip install
+  --no-index` complains about a missing/incompatible wheel, it's almost
+  certainly a transitive dependency I missed; check
+  `panel/vendor/wheels/VERSIONS.md`.
