@@ -73,6 +73,7 @@ def sync_waf_rules(db: Session) -> None:
         payload.append(
             {
                 "id": rule.id,
+                "name": rule.name,
                 "domain": rule.domain.name.lower() if rule.domain else None,
                 "target": rule.target,
                 "match_type": rule.match_type,

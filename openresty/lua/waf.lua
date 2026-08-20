@@ -78,16 +78,25 @@ end
 -- ---- Data loading (with short-lived shared-dict caching) ---------------
 
 local function fetch_cached_json(red, redis_key, cache_key, default_value)
-    local cached = waf_cache:get(cache_key)
-    if cached then
-        return cjson.decode(cached)
+    local raw = waf_cache:get(cache_key)
+    if not raw then
+        local res, err = red:get(redis_key)
+        if not res or res == ngx.null then
+            res = default_value
+        end
+        waf_cache:set(cache_key, res, RULES_CACHE_TTL)
+        raw = res
     end
-    local res, err = red:get(redis_key)
-    if not res or res == ngx.null then
-        res = default_value
+
+    -- cjson.safe never throws, but returns nil (not an empty table) on
+    -- malformed JSON — guard against that so callers can always safely
+    -- ipairs() the result instead of crashing the whole request.
+    local decoded = cjson.decode(raw)
+    if type(decoded) ~= "table" then
+        ngx.log(ngx.ERR, "waf: malformed JSON in ", redis_key, ", ignoring")
+        return {}
     end
-    waf_cache:set(cache_key, res, RULES_CACHE_TTL)
-    return cjson.decode(res)
+    return decoded
 end
 
 local function load_rules(red)
@@ -110,7 +119,14 @@ local function get_haystack(rule, body)
             return nil
         end
         local headers = ngx.req.get_headers()
-        return headers[rule.header_name]
+        local value = headers[rule.header_name]
+        -- A repeated header (e.g. two Cookie: lines) comes back as a table
+        -- of values rather than a string — join them so matching still
+        -- works instead of silently never matching (or erroring).
+        if type(value) == "table" then
+            return table.concat(value, ", ")
+        end
+        return value
     elseif rule.target == "body" then
         return body
     end
@@ -197,9 +213,17 @@ function _M.enforce(cfg)
     end
 
     for _, rule in ipairs(applicable) do
-        local haystack = get_haystack(rule, body)
-        if rule_matches(rule, haystack) then
-            local reason = rule.name .. " (" .. rule.target .. " " .. rule.match_type .. ")"
+        -- A single malformed/unexpected rule must never take down the
+        -- whole request (and so every request to this domain) — evaluate
+        -- each rule defensively and just skip it (logged) on error rather
+        -- than letting the error abort the access phase.
+        local ok, matched = pcall(function()
+            return rule_matches(rule, get_haystack(rule, body))
+        end)
+        if not ok then
+            ngx.log(ngx.ERR, "waf: error evaluating rule ", rule.id or "?", ": ", matched)
+        elseif matched then
+            local reason = (rule.name or "rule") .. " (" .. (rule.target or "?") .. " " .. (rule.match_type or "?") .. ")"
             if rule.action == "block" then
                 return deny(red, cfg, ip, 403, reason)
             else
