@@ -42,8 +42,9 @@ To try it against a local test backend instead of a real domain:
 docker compose --profile demo up --build
 ```
 
-This also starts a `demo-origin` (traefik/whoami) container you can point a
-domain's origin at for testing.
+This also starts a `demo-origin` (traefik/whoami) container published to
+`127.0.0.1:8081` — add a domain in the panel with origin host `127.0.0.1`,
+origin port `8081` to test against it.
 
 ### Typical first steps in the panel
 
@@ -59,6 +60,62 @@ domain's origin at for testing.
 4. **WAF** → add a rule (e.g. block requests where the `User-Agent` header
    *contains* `sqlmap`) or block a specific IP/CIDR.
 5. **Logs** → watch blocked/logged requests roll in live.
+
+## Deploying on a real server (ingress mode)
+
+`openresty` runs with `network_mode: host` (Linux-only), which does two
+things at once:
+
+- It binds ports 80/443 directly on the server's real network interfaces,
+  with no Docker NAT in the path — `$remote_addr` in nginx (and so the
+  panel's dashboard/log feed) is the genuine client IP.
+- `127.0.0.1` inside that container is the **host's real loopback**, so it
+  can `proxy_pass` straight to anything you've published to
+  `127.0.0.1:<port>` on the same machine — your other apps/containers, not
+  just ones in this compose project.
+
+So to front an existing app running elsewhere on the same server: publish
+its port to the host's loopback (e.g. another compose project with
+`ports: ["127.0.0.1:3000:3000"]`, or a bare process listening on
+`127.0.0.1:3000`), then in the Open-Shield panel add a domain with
+origin host `127.0.0.1`, origin port `3000`.
+
+Everything else in the stack (`postgres`, `redis`, `powerdns`, `panel`)
+stays on the isolated `openshield` bridge network as before — only `redis`
+additionally publishes to `127.0.0.1:6379` so the now-host-networked
+`openresty` can still reach it.
+
+Trade-off worth knowing: host networking removes network isolation for
+that one container — it can reach (and be reached by) anything else
+listening on the host's network stack, not just what you intend it to. If
+you don't need the `127.0.0.1`-origin use case, you can revert `openresty`
+to normal bridge networking (add back `ports: ["80:80", "443:443"]` and
+`networks: [openshield]`, remove `network_mode: host`, and point
+`REDIS_URL` back at `redis:6379`) — real client IPs still work fine in
+that mode too for genuine external traffic (Docker's port-publishing DNAT
+preserves the original source IP; it's only requests originating from the
+host itself, like `curl localhost`, that show up as the bridge gateway IP,
+which is expected and not a real-world concern).
+
+### Start on boot
+
+1. Make sure the Docker daemon itself is enabled: `sudo systemctl enable --now docker`.
+   Combined with `restart: unless-stopped` on every service, that alone is
+   enough to bring the stack back after a reboot **as long as it was
+   running (not manually `docker compose down`'d) beforehand**.
+2. For a fully deterministic boot regardless of prior state, install the
+   provided systemd unit instead:
+
+   ```sh
+   sudo cp deploy/open-shield.service /etc/systemd/system/
+   sudo sed -i "s#/opt/open-shield#$(pwd)#" /etc/systemd/system/open-shield.service
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now open-shield.service
+   ```
+
+   This runs `docker compose up -d` on boot and `docker compose down` on
+   `systemctl stop open-shield` — use `systemctl {start,stop,restart,status}
+   open-shield` instead of `docker compose` directly once it's installed.
 
 ### HTTPS modes
 

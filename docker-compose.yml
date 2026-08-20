@@ -36,6 +36,11 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redisdata:/data
+    ports:
+      # Loopback-only, so the host-networked openresty container (which no
+      # longer shares this bridge network) can still reach redis via
+      # 127.0.0.1 — not reachable from outside this machine.
+      - "127.0.0.1:6379:6379"
     networks:
       - openshield
     healthcheck:
@@ -106,21 +111,30 @@ services:
   openresty:
     build: ./openresty
     restart: unless-stopped
+    # Host networking: binds 80/443 directly on the server's real
+    # interfaces (so nginx sees genuine client IPs, no Docker NAT in the
+    # path) and puts 127.0.0.1 inside this container == the host's real
+    # loopback, so it can proxy_pass straight to any other container/app
+    # you've published to 127.0.0.1:<port> on this machine. Linux-only;
+    # `ports:`/`networks:` are dropped since they don't apply in this mode.
+    network_mode: host
     depends_on:
       redis:
         condition: service_healthy
     environment:
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # redis is still on the isolated `openshield` bridge network; reach
+      # it via the loopback port published above now that this container
+      # no longer shares that network.
+      REDIS_URL: redis://:${REDIS_PASSWORD}@127.0.0.1:6379/0
       ACME_EMAIL: ${ACME_EMAIL}
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - openshield
 
   demo-origin:
     image: traefik/whoami
     restart: unless-stopped
     profiles: ["demo"]
+    ports:
+      # Published the same way any real origin container would be, so it's
+      # reachable from the host-networked openresty at 127.0.0.1:8081.
+      - "127.0.0.1:8081:80"
     networks:
       - openshield
