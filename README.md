@@ -140,6 +140,26 @@ Domains with HTTPS on ("automatic" or "manual") get all plain-HTTP traffic
 runs the same way — but you'll get a browser certificate warning, since only
 the edge's self-signed fallback cert is presented).
 
+## Panel login security
+
+`/login` (port 8080) has brute-force lockout built in (`panel/app/login_guard.py`):
+after `LOGIN_MAX_ATTEMPTS` (default 5) failed attempts from one IP within
+`LOGIN_FAIL_WINDOW_SECONDS` (default 15 min), that IP is locked out of
+`/login` entirely — no password check even attempted — for
+`LOGIN_LOCKOUT_BASE_SECONDS` (default 1 hour), **doubling on each further
+violation** up to `LOGIN_LOCKOUT_MAX_SECONDS` (default 24h capped). A
+successful login clears both the failure count and the escalation level.
+Tracked in Redis, so it survives a panel restart and works correctly even
+with multiple panel replicas. Tune via those env vars (see `.env.example`)
+if the defaults are too strict/loose for you.
+
+Beyond that: put the panel behind the same HTTPS you'd use for any admin
+tool if it's reachable from the internet (see the HTTPS modes above — you
+can proxy the panel itself through `openresty` like any other domain), use
+a real random `ADMIN_PASSWORD`/`SESSION_SECRET`, and consider firewalling
+port 8080 to a trusted network/VPN if you don't need it reachable publicly
+at all.
+
 ## Repo layout
 
 ```

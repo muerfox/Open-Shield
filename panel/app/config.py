@@ -18,6 +18,15 @@ class Settings:
 
     edge_public_host: str = os.environ.get("EDGE_PUBLIC_HOST", "")
 
+    # Login brute-force protection (see login_guard.py). After
+    # login_max_attempts failures from one IP within login_fail_window_seconds,
+    # that IP is locked out of /login for login_lockout_base_seconds, doubling
+    # on each further violation up to login_lockout_max_seconds.
+    login_max_attempts: int = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))
+    login_fail_window_seconds: int = int(os.environ.get("LOGIN_FAIL_WINDOW_SECONDS", str(15 * 60)))
+    login_lockout_base_seconds: int = int(os.environ.get("LOGIN_LOCKOUT_BASE_SECONDS", str(60 * 60)))
+    login_lockout_max_seconds: int = int(os.environ.get("LOGIN_LOCKOUT_MAX_SECONDS", str(24 * 60 * 60)))
+
 
 @lru_cache
 def get_settings() -> Settings:
