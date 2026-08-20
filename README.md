@@ -1,40 +1,46 @@
 # Open-Shield
 
-A self-hosted, Cloudflare-style platform: a Python admin panel for managing
-**DNS**, a reverse-proxy **CDN** in front of your origins, and a **WAF**
-that inspects headers/URL/body and can block by IP/CIDR or matching
-strings/regex — all shipped as Docker images you run with `docker compose`.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker Compose](https://img.shields.io/badge/deploy-docker%20compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 
-## Architecture
+**Your own Cloudflare, running on your own box.** A self-hosted DNS + CDN +
+WAF platform with a Python admin panel — point your domains at it, and get
+authoritative DNS, a caching reverse-proxy edge, and a real WAF (block by
+IP/CIDR, or by header/URL/body pattern) without handing your traffic to a
+third party. Ships as five Docker images and a `docker-compose.yml`; nothing
+to install on the host beyond Docker itself.
 
-| Component  | What it is | Role |
-|---|---|---|
-| `panel`     | FastAPI + Jinja2/HTMX (Python) | The admin UI: manage domains, DNS records, WAF rules, IP blocks, view logs |
-| `openresty` | OpenResty (nginx + Lua) | The public edge on 80/443: reverse proxy, cache, WAF enforcement, automatic HTTPS |
-| `powerdns`  | PowerDNS (`pschiffe/pdns-pgsql`) | Real authoritative DNS server for your zones, driven by the panel via its HTTP API |
-| `postgres`  | Postgres 16 | Storage for the panel's own config (domains/rules) and for PowerDNS's zone data |
-| `redis`     | Redis 7 | Hot-path shared state: domain routing table, WAF rules, IP blocklists, rate-limit counters, ACME cert storage, recent WAF event feed |
+Built because "self-hosted ingress + WAF + DNS" for a small VPS or home
+server shouldn't require stitching together five different dashboards — one
+panel, one `docker compose up`, and config changes go live **instantly, with
+no reload**, because the whole edge reads its config from Redis on every
+request.
 
-**Data flow:** the panel is the source of truth in Postgres for CDN/WAF
-config, and pushes a flattened copy into Redis on every change — that's what
-OpenResty's Lua modules read on the request hot path, so rule/domain changes
-take effect immediately with **no nginx reload**. PowerDNS is the source of
-truth for actual DNS records (queried live via its API). When a domain has
-"proxy" enabled in the panel, its DNS A record is automatically pointed at
-the OpenResty edge (the "orange cloud" mechanic) while the real origin is
-kept separately for OpenResty to connect to.
+## Features
+
+- 🌐 **Real DNS** — [PowerDNS](https://www.powerdns.com/) under the hood, driven entirely through the panel. Zones, A/AAAA/CNAME/MX/TXT/NS/SRV/CAA records.
+- 🚀 **CDN** — reverse proxy + caching per domain, powered by [OpenResty](https://openresty.org/). Point it at any origin, anywhere.
+- 🛡️ **WAF** — block by IP/CIDR, or by rule: match a header, the URL, or the request body, with `contains`/`regex`/`exact` matching and block-or-log actions. Plus per-domain rate limiting.
+- ⚡ **Zero-reload config** — the panel pushes every change straight to Redis; OpenResty's Lua reads it on the next request. No nginx reload, ever, for a domain/rule/IP change.
+- 🔒 **Three HTTPS modes per domain** — plain HTTP (no cert hassle), automatic Let's Encrypt, or paste your own certificate.
+- 🖥️ **Ingress mode** — run it as the public front door on a real server: real client IPs, `proxy_pass` straight to anything else you've published to `127.0.0.1` on the same box.
+- 🔐 **Brute-force-hardened login** — escalating lockout (doubling up to 24h) on the panel itself, plus edge-level rate limiting in front of it.
+- 📴 **Builds offline** — every Python/Lua dependency is vendored and hash-verified; `docker build` never touches PyPI, GitHub, or luarocks.org.
+- 📊 **Live dashboard** — recent WAF events, block counts, all polling live via HTMX.
 
 ## Quick start
 
 ```sh
+git clone git@github.com:muerfox/Open-Shield.git
+cd Open-Shield
 cp .env.example .env
 # edit .env: set real passwords/secrets, PDNS_DEFAULT_NS, EDGE_PUBLIC_HOST, ACME_EMAIL
 
 docker compose up --build
 ```
 
-Then open `http://localhost:8080` and log in with `ADMIN_EMAIL` /
-`ADMIN_PASSWORD` from your `.env`.
+Open `http://localhost:8080` and log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+from your `.env`.
 
 To try it against a local test backend instead of a real domain:
 
@@ -61,6 +67,25 @@ origin port `8081` to test against it.
    *contains* `sqlmap`) or block a specific IP/CIDR.
 5. **Logs** → watch blocked/logged requests roll in live.
 
+## Architecture
+
+| Component  | What it is | Role |
+|---|---|---|
+| `panel`     | FastAPI + Jinja2/HTMX (Python) | The admin UI: manage domains, DNS records, WAF rules, IP blocks, view logs |
+| `openresty` | OpenResty (nginx + Lua) | The public edge on 80/443: reverse proxy, cache, WAF enforcement, automatic HTTPS |
+| `powerdns`  | PowerDNS (`pschiffe/pdns-pgsql`) | Real authoritative DNS server for your zones, driven by the panel via its HTTP API |
+| `postgres`  | Postgres 16 | Storage for the panel's own config (domains/rules) and for PowerDNS's zone data |
+| `redis`     | Redis 7 | Hot-path shared state: domain routing table, WAF rules, IP blocklists, rate-limit counters, ACME cert storage, recent WAF event feed |
+
+**Data flow:** the panel is the source of truth in Postgres for CDN/WAF
+config, and pushes a flattened copy into Redis on every change — that's what
+OpenResty's Lua modules read on the request hot path, so rule/domain changes
+take effect immediately with **no nginx reload**. PowerDNS is the source of
+truth for actual DNS records (queried live via its API). When a domain has
+"proxy" enabled in the panel, its DNS A record is automatically pointed at
+the OpenResty edge (the "orange cloud" mechanic) while the real origin is
+kept separately for OpenResty to connect to.
+
 ## Deploying on a real server (ingress mode)
 
 `openresty` runs with `network_mode: host` (Linux-only), which does two
@@ -81,9 +106,9 @@ its port to the host's loopback (e.g. another compose project with
 origin host `127.0.0.1`, origin port `3000`.
 
 Everything else in the stack (`postgres`, `redis`, `powerdns`, `panel`)
-stays on the isolated `openshield` bridge network as before — only `redis`
-additionally publishes to `127.0.0.1:6379` so the now-host-networked
-`openresty` can still reach it.
+stays on the isolated `openshield` bridge network as before — `redis` and
+`panel` additionally publish loopback-only ports so the now-host-networked
+`openresty` can still reach them.
 
 Trade-off worth knowing: host networking removes network isolation for
 that one container — it can reach (and be reached by) anything else
@@ -117,7 +142,7 @@ which is expected and not a real-world concern).
    `systemctl stop open-shield` — use `systemctl {start,stop,restart,status}
    open-shield` instead of `docker compose` directly once it's installed.
 
-### HTTPS modes
+## HTTPS modes
 
 Each domain has its own **HTTPS** setting on the domain form:
 
@@ -142,35 +167,25 @@ the edge's self-signed fallback cert is presented).
 
 ## Panel login security
 
-`/login` (port 8080) has brute-force lockout built in (`panel/app/login_guard.py`):
+`/login` has brute-force lockout built in (`panel/app/login_guard.py`):
 after `LOGIN_MAX_ATTEMPTS` (default 5) failed attempts from one IP within
 `LOGIN_FAIL_WINDOW_SECONDS` (default 15 min), that IP is locked out of
 `/login` entirely — no password check even attempted — for
 `LOGIN_LOCKOUT_BASE_SECONDS` (default 1 hour), **doubling on each further
 violation** up to `LOGIN_LOCKOUT_MAX_SECONDS` (default 24h capped). A
 successful login clears both the failure count and the escalation level.
-Tracked in Redis, so it survives a panel restart and works correctly even
-with multiple panel replicas. Tune via those env vars (see `.env.example`)
-if the defaults are too strict/loose for you.
+Tracked in Redis, so it survives a panel restart. Tune via those env vars
+(see `.env.example`) if the defaults are too strict/loose for you.
 
-Beyond that: put the panel behind the same HTTPS you'd use for any admin
-tool if it's reachable from the internet (see the HTTPS modes above — you
-can proxy the panel itself through `openresty` like any other domain), use
-a real random `ADMIN_PASSWORD`/`SESSION_SECRET`, and consider firewalling
-port 8080 to a trusted network/VPN if you don't need it reachable publicly
-at all.
+On top of that, `openresty` (the same edge that fronts your domains) also
+fronts port 8080 with plain nginx rate limiting — a tight 5-requests-per-
+minute zone specifically on `/login`, and a generous general zone for
+everything else — so the app never even sees a credential-stuffing flood in
+the first place. See `openresty/conf.d/panel.conf`.
 
-## Repo layout
-
-```
-panel/       FastAPI admin panel (Python)
-  vendor/wheels/   vendored pip wheels (offline build — see below)
-openresty/   Edge: nginx.conf, conf.d/, Lua modules (router, WAF, auto-ssl)
-  vendor/          vendored lua-resty-auto-ssl + its deps (offline build)
-postgres/    DB init script (creates the `panel` and `pdns` databases)
-docker-compose.yml
-.env.example
-```
+Beyond that: use a real random `ADMIN_PASSWORD`/`SESSION_SECRET`, and
+consider firewalling port 8080 to a trusted network/VPN if you don't need
+the panel reachable publicly at all.
 
 ## Offline builds
 
@@ -190,46 +205,51 @@ access** at `docker build` time:
   `openresty/vendor/VERSIONS.md`.
 
 What's **not** vendored, and why: each Dockerfile's own OS package install
-(`apk add ...` for Alpine, none needed anymore for the Debian-based panel
-image) still hits the base image's configured package mirror — vendoring
-raw `.apk`/`.deb` binaries into git is fragile (tightly version/arch-coupled
-to the exact base image) and something that couldn't be verified working in
-the sandbox this was built in. Pulling the base images themselves
-(`python:3.12-slim`, `openresty/openresty:...-alpine-fat`, `postgres:16-alpine`,
-`redis:7-alpine`, `pschiffe/pdns-pgsql:alpine`, `traefik/whoami`) also still
-needs network the first time — that's inherent to how Docker registries
-work and isn't something a git repo can vendor around; run `docker compose
-up --build` once with network access, and normal Docker layer caching keeps
-subsequent rebuilds offline as long as those base image layers and this
-`vendor/` content don't change.
+(`apk add ...` for Alpine) still hits the base image's configured package
+mirror — vendoring raw `.apk`/`.deb` binaries into git is fragile (tightly
+version/arch-coupled to the exact base image). Pulling the base images
+themselves (`python:3.12-slim`, `openresty/openresty:...-alpine-fat`,
+`postgres:16-alpine`, `redis:7-alpine`, `pschiffe/pdns-pgsql:alpine`,
+`traefik/whoami`) also still needs network the first time — that's
+inherent to how Docker registries work. Run `docker compose up --build`
+once with network access, and normal Docker layer caching keeps subsequent
+rebuilds offline as long as those base image layers and this `vendor/`
+content don't change.
 
-## Known limitations / v1 scope
+## Repo layout
 
-- **Single admin user**, no RBAC/multi-tenant support yet.
+```
+panel/       FastAPI admin panel (Python)
+  vendor/wheels/   vendored pip wheels (offline build — see above)
+openresty/   Edge: nginx.conf, conf.d/, Lua modules (router, WAF, auto-ssl)
+  vendor/          vendored lua-resty-auto-ssl + its deps (offline build)
+postgres/    DB init script (creates the `panel` and `pdns` databases)
+deploy/      Optional systemd unit for boot-start
+docker-compose.yml
+.env.example
+```
+
+## Roadmap / known limitations
+
+Contributions welcome on any of these:
+
+- **Single admin user** — no RBAC/multi-tenant support yet.
 - **IPv4-only** CIDR blocking (IPv6 CIDR matching isn't implemented).
 - Deleting a domain in the panel does **not** delete its PowerDNS zone —
   manage zone deletion from the DNS page if you want that too.
 - WAF events are kept in a capped Redis list (last 500), not a full log
   pipeline — fine for a single-server setup, not built for high-volume
   forensics.
-- HTTPS relies on [`lua-resty-auto-ssl`](https://github.com/GUI/lua-resty-auto-ssl)
-  for on-the-fly Let's Encrypt certs. That project is now archived/unmaintained
-  upstream — it still works (uses `dehydrated` under the hood), but if you'd
-  rather not depend on it, swapping in a `certbot` sidecar + static certs is
-  a reasonable alternative for a future iteration.
+- HTTPS relies on [`lua-resty-auto-ssl`](https://github.com/auto-ssl/lua-resty-auto-ssl)
+  for on-the-fly Let's Encrypt certs. That project is archived/unmaintained
+  upstream — it still works (uses `dehydrated` under the hood), but a
+  `certbot`-based alternative would be a reasonable future swap.
 - No Kubernetes manifests — Docker Compose only, by design.
-- This was built and reviewed without a live Docker environment to test
-  against (see below) — treat the first `docker compose up --build` as the
-  real integration test, and expect to iterate on it.
 
-## Testing this yourself
+## Troubleshooting
 
-This was developed in a sandboxed environment without Docker available, so
-it was verified statically (Python syntax checks; manual review of the Lua
-modules against the `lua-resty-redis`/`lua-resty-auto-ssl` APIs and the
-PowerDNS HTTP API docs) rather than by actually running the stack. Please
-run `docker compose up --build` and go through the quick-start steps above —
-if anything breaks, the likely trouble spots are:
+If a `docker compose up --build` doesn't come up clean, the likely spots to
+check first:
 
 - The vendored `luarocks make` build chain in `openresty/Dockerfile`
   (`openresty/vendor/`) — in particular the `sockproc` C compile and the
@@ -241,5 +261,22 @@ if anything breaks, the likely trouble spots are:
   from the public internet to actually issue certificates.
 - The vendored wheel set in `panel/vendor/wheels/` — if `pip install
   --no-index` complains about a missing/incompatible wheel, it's almost
-  certainly a transitive dependency I missed; check
+  certainly a transitive dependency that's missing; check
   `panel/vendor/wheels/VERSIONS.md`.
+
+Open an issue with the relevant `docker compose logs <service>` output and
+what you were doing when it broke.
+
+## Contributing
+
+Issues and PRs welcome — bug reports, features from the roadmap above,
+docs fixes, all good. No CI pipeline yet, so just make sure `docker compose
+up --build` still comes up clean and the feature you touched still works
+before opening a PR.
+
+## License
+
+[MIT](LICENSE) for Open-Shield's own code. Vendored third-party source
+under `openresty/vendor/` and `panel/vendor/` keeps its own original
+license (MIT/BSD-2-Clause — see the `LICENSE`/`LICENSE.txt` file inside
+each vendored project's directory).
