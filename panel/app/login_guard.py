@@ -27,6 +27,15 @@ def _lockout_level_key(ip: str) -> str:
 
 
 def client_ip(request: Request) -> str:
+    """The panel is only reachable via the openresty proxy in front of it
+    (its own port is published loopback-only — see docker-compose.yml),
+    which always sets X-Real-IP itself, so trusting it here is safe: an
+    external caller can't reach this app directly to spoof it. Falls back
+    to the raw peer address for e.g. local dev without that proxy in front.
+    """
+    forwarded = request.headers.get("x-real-ip")
+    if forwarded:
+        return forwarded.strip()
     return request.client.host if request.client else "unknown"
 
 
