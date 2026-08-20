@@ -108,13 +108,9 @@ services:
       LOGIN_LOCKOUT_BASE_SECONDS: ${LOGIN_LOCKOUT_BASE_SECONDS:-3600}
       LOGIN_LOCKOUT_MAX_SECONDS: ${LOGIN_LOCKOUT_MAX_SECONDS:-86400}
     ports:
-      # Loopback-only: openresty (below) is the actual public entry point
-      # for 8080 too now, so it can rate-limit it. Not reachable directly
-      # from outside this machine.
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     networks:
       - openshield
-    # (healthcheck comes from panel/Dockerfile's own HEALTHCHECK)
 
   openresty:
     build: ./openresty
@@ -128,8 +124,6 @@ services:
     network_mode: host
     depends_on:
       redis:
-        condition: service_healthy
-      panel:
         condition: service_healthy
     environment:
       # redis is still on the isolated `openshield` bridge network; reach
