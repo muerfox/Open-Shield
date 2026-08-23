@@ -2,6 +2,12 @@
 -- cache, rate-limit settings) as synced into Redis by the panel.
 -- Results are cached in a shared dict for a couple seconds to avoid
 -- hitting Redis on every single request.
+--
+-- Supports one level of wildcard domain (e.g. "*.example.com", matching
+-- "anything.example.com" but not "a.b.example.com" or the bare apex,
+-- same semantics as DNS/TLS wildcards generally): if there's no exact
+-- match for the requested host, falls back to looking up "*." plus
+-- everything after the first label.
 
 local cjson = require "cjson.safe"
 local redis_client = require "redis_client"
@@ -15,8 +21,10 @@ local function bool(v)
     return v == "1"
 end
 
-function _M.resolve(host)
-    local cache_key = "domain:" .. host
+-- Looks up a single Redis key (either an exact host or a "*.parent"
+-- wildcard pattern) and returns a decoded cfg table, or nil.
+local function resolve_key(key)
+    local cache_key = "domain:" .. key
     local cached = waf_cache:get(cache_key)
     if cached == "__MISS__" then
         return nil
@@ -30,7 +38,7 @@ function _M.resolve(host)
         return nil
     end
 
-    local res, err = red:hgetall("domain:" .. host)
+    local res, err = red:hgetall("domain:" .. key)
     if not res then
         ngx.log(ngx.ERR, "router: hgetall failed: ", err)
         redis_client.release(red)
@@ -47,7 +55,6 @@ function _M.resolve(host)
     redis_client.release(red)
 
     local cfg = {
-        host = host,
         origin_scheme = h.origin_scheme or "http",
         origin_host = h.origin_host,
         origin_port = tonumber(h.origin_port) or 80,
@@ -62,6 +69,36 @@ function _M.resolve(host)
     }
 
     waf_cache:set(cache_key, cjson.encode(cfg), CACHE_TTL)
+    return cfg
+end
+
+-- cfg.host is always the actual requested hostname (used for cache keys,
+-- rate-limit buckets, and log/event display — each subdomain gets its own).
+-- cfg.domain_key is the Redis identity of the *matched configuration*
+-- (the wildcard pattern itself when matched via wildcard) — used to scope
+-- WAF rules/IP blocklists/manual SSL certs, since that's what the admin
+-- actually configured in the panel.
+function _M.resolve(host)
+    local cfg = resolve_key(host)
+    if cfg then
+        cfg.host = host
+        cfg.domain_key = host
+        return cfg
+    end
+
+    local parent = host:match("^[^.]+%.(.+)$")
+    if not parent then
+        return nil
+    end
+
+    local wildcard_key = "*." .. parent
+    cfg = resolve_key(wildcard_key)
+    if not cfg then
+        return nil
+    end
+
+    cfg.host = host
+    cfg.domain_key = wildcard_key
     return cfg
 end
 

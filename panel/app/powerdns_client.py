@@ -15,6 +15,15 @@ def _fqdn(name: str) -> str:
     return name if name.endswith(".") else f"{name}."
 
 
+def zone_for_domain(name: str) -> str:
+    """The PowerDNS zone a Domain belongs to. Wildcard domains (e.g.
+    "*.example.com") live in the zone for their parent ("example.com") —
+    "*.example.com" itself is just a record within that zone, not a zone
+    of its own."""
+    name = name.strip().lower()
+    return name[2:] if name.startswith("*.") else name
+
+
 def _client() -> httpx.Client:
     settings = get_settings()
     return httpx.Client(
@@ -101,6 +110,7 @@ def delete_rrset(zone: str, record_name: str, record_type: str) -> None:
         r.raise_for_status()
 
 
-def set_proxied_a_record(zone: str, edge_host: str, ttl: int = 300) -> None:
-    """Point a proxied domain's apex A record at the Open-Shield edge."""
-    upsert_rrset(zone, zone, "A", ttl, [edge_host])
+def set_proxied_a_record(zone: str, record_name: str, edge_host: str, ttl: int = 300) -> None:
+    """Point a proxied domain's A record (its apex, or "*.<zone>" for a
+    wildcard domain) at the Open-Shield edge."""
+    upsert_rrset(zone, record_name, "A", ttl, [edge_host])

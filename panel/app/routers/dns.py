@@ -23,9 +23,10 @@ def _get_domain_or_404(db: Session, domain_id: int) -> Domain:
 
 
 def _ensure_zone(domain: Domain) -> dict:
-    zone = powerdns_client.get_zone(domain.name)
+    zone_name = powerdns_client.zone_for_domain(domain.name)
+    zone = powerdns_client.get_zone(zone_name)
     if zone is None:
-        zone = powerdns_client.create_zone(domain.name, get_settings().pdns_default_ns)
+        zone = powerdns_client.create_zone(zone_name, get_settings().pdns_default_ns)
     return zone
 
 
@@ -81,11 +82,12 @@ def upsert_record(
             status_code=400,
         )
 
+    zone_name = powerdns_client.zone_for_domain(domain.name)
     record_name = name.strip() or domain.name
-    if not record_name.endswith(domain.name):
-        record_name = f"{record_name}.{domain.name}"
+    if not record_name.endswith(zone_name):
+        record_name = f"{record_name}.{zone_name}"
 
-    powerdns_client.upsert_rrset(domain.name, record_name, type, ttl_int, values, priority_int)
+    powerdns_client.upsert_rrset(zone_name, record_name, type, ttl_int, values, priority_int)
     return RedirectResponse(f"/dns/{domain_id}", status_code=303)
 
 
@@ -98,5 +100,6 @@ def delete_record(
     type: str = Form(...),
 ):
     domain = _get_domain_or_404(db, domain_id)
-    powerdns_client.delete_rrset(domain.name, name, type)
+    zone_name = powerdns_client.zone_for_domain(domain.name)
+    powerdns_client.delete_rrset(zone_name, name, type)
     return RedirectResponse(f"/dns/{domain_id}", status_code=303)

@@ -158,17 +158,20 @@ function _M.enforce(cfg)
         return
     end
 
-    -- 1. Exact-match IP blocklist (global + per-domain).
+    -- 1. Exact-match IP blocklist (global + per-domain). Scoped by
+    -- domain_key (the *configured* domain, e.g. a wildcard pattern),
+    -- not the literal requested host, so a block set on "*.example.com"
+    -- applies to every subdomain under it.
     local blocked, err = red:sismember("waf:blocked_ips:global", ip)
     if not blocked or blocked == 0 then
-        blocked = red:sismember("waf:blocked_ips:" .. cfg.host, ip)
+        blocked = red:sismember("waf:blocked_ips:" .. cfg.domain_key, ip)
     end
     if blocked and blocked == 1 then
         return deny(red, cfg, ip, 403, "ip_blocklist")
     end
 
     -- 2. CIDR blocklist (global + per-domain).
-    local global_cidrs, scoped_cidrs = load_cidrs(red, cfg.host)
+    local global_cidrs, scoped_cidrs = load_cidrs(red, cfg.domain_key)
     for _, cidr in ipairs(global_cidrs) do
         if ip_in_cidr(ip, cidr) then
             return deny(red, cfg, ip, 403, "cidr_blocklist:" .. cidr)
@@ -180,7 +183,9 @@ function _M.enforce(cfg)
         end
     end
 
-    -- 3. Rate limiting.
+    -- 3. Rate limiting. Scoped by the actual requested host (not
+    -- domain_key), so each subdomain under a wildcard gets its own
+    -- independent bucket rather than sharing one across every tenant.
     if cfg.rate_limit_enabled then
         local key = "rl:" .. cfg.host .. ":" .. ip
         local count, err = red:incr(key)
@@ -199,7 +204,7 @@ function _M.enforce(cfg)
     local applicable = {}
     local needs_body = false
     for _, rule in ipairs(rules) do
-        if rule.domain == nil or rule.domain == cjson.null or rule.domain == cfg.host then
+        if rule.domain == nil or rule.domain == cjson.null or rule.domain == cfg.domain_key then
             table.insert(applicable, rule)
             if rule.target == "body" then
                 needs_body = true

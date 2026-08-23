@@ -7,7 +7,15 @@
 <form method="post" action="{% if domain %}/domains/{{ domain.id }}/edit{% else %}/domains/new{% endif %}">
   {% if not domain %}
   <label for="name">Domain name
-    <input type="text" id="name" name="name" placeholder="example.com" required>
+    <input type="text" id="name" name="name" placeholder="example.com or *.example.com" required>
+    <small>
+      A wildcard (<code>*.example.com</code>) matches any subdomain that
+      doesn't already have its own exact entry — e.g. for a service that
+      generates a subdomain per user. All matching subdomains share this
+      one origin/WAF/cache config; with HTTPS set to Automatic, each
+      subdomain still gets its own real Let's Encrypt certificate issued
+      on first visit.
+    </small>
   </label>
   {% endif %}
 

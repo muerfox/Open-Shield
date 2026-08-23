@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -26,7 +27,11 @@ def _get_domain_or_404(db: Session, domain_id: int) -> Domain:
 
 def _apply_dns_for_proxy(domain: Domain) -> None:
     """Best-effort: ensure a PowerDNS zone exists for the domain, and if
-    proxying is on, point its apex A record at the Open-Shield edge.
+    proxying is on, point its A record at the Open-Shield edge. For a
+    wildcard domain ("*.example.com"), the zone is the parent
+    ("example.com") — "*.example.com" is just a record within it, not a
+    zone of its own — but the A record itself is still the full wildcard
+    name, so DNS actually resolves any subdomain to this server.
 
     DNS/PowerDNS being unreachable or misconfigured must never block the
     Redis sync that makes the domain live on the CDN/WAF edge — that's the
@@ -34,13 +39,31 @@ def _apply_dns_for_proxy(domain: Domain) -> None:
     """
     try:
         settings = get_settings()
-        zone = powerdns_client.get_zone(domain.name)
+        zone_name = powerdns_client.zone_for_domain(domain.name)
+        zone = powerdns_client.get_zone(zone_name)
         if zone is None:
-            powerdns_client.create_zone(domain.name, settings.pdns_default_ns)
+            powerdns_client.create_zone(zone_name, settings.pdns_default_ns)
         if domain.proxied and settings.edge_public_host:
-            powerdns_client.set_proxied_a_record(domain.name, settings.edge_public_host)
+            powerdns_client.set_proxied_a_record(zone_name, domain.name, settings.edge_public_host)
     except Exception:
         logger.exception("DNS setup failed for domain %s (edge routing is unaffected)", domain.name)
+
+
+_DOMAIN_LABEL = r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+_DOMAIN_RE = re.compile(rf"^({_DOMAIN_LABEL}\.)+[a-z]{{2,}}$")
+
+
+def _validate_domain_name(name: str) -> str | None:
+    if name.startswith("*."):
+        rest = name[2:]
+        if "*" in rest:
+            return "Only a single leading wildcard is supported (e.g. '*.example.com')."
+        name = rest
+    elif "*" in name:
+        return "Wildcards are only supported as a leading '*.' (e.g. '*.example.com')."
+    if not _DOMAIN_RE.match(name):
+        return f"'{name}' doesn't look like a valid domain name."
+    return None
 
 
 def _validate_ssl(ssl_mode: str, ssl_cert: str, ssl_key: str) -> str | None:
@@ -101,6 +124,16 @@ def create_domain(
     rate_limit_window_seconds: int = Form(10),
 ):
     name = name.lower().strip().rstrip(".")
+
+    name_error = _validate_domain_name(name)
+    if name_error:
+        return templates.TemplateResponse(
+            request,
+            "domains/form.html",
+            {"user": user, "domain": None, "error": name_error},
+            status_code=400,
+        )
+
     existing = db.scalar(select(Domain).where(Domain.name == name))
     if existing is not None:
         return templates.TemplateResponse(

@@ -20,6 +20,7 @@ request.
 
 - 🌐 **Real DNS** — [PowerDNS](https://www.powerdns.com/) under the hood, driven entirely through the panel. Zones, A/AAAA/CNAME/MX/TXT/NS/SRV/CAA records.
 - 🚀 **CDN** — reverse proxy + caching per domain, powered by [OpenResty](https://openresty.org/). Point it at any origin, anywhere.
+- 🃏 **Wildcard domains** — `*.example.com` in one entry, for services that mint a subdomain per user/tenant. Each matching subdomain still gets its own real Let's Encrypt certificate automatically.
 - 🛡️ **WAF** — block by IP/CIDR, or by rule: match a header, the URL, or the request body, with `contains`/`regex`/`exact` matching and block-or-log actions. Plus per-domain rate limiting.
 - ⚡ **Zero-reload config** — the panel pushes every change straight to Redis; OpenResty's Lua reads it on the next request. No nginx reload, ever, for a domain/rule/IP change.
 - 🔒 **Three HTTPS modes per domain** — plain HTTP (no cert hassle), automatic Let's Encrypt, or paste your own certificate.
@@ -173,6 +174,36 @@ Domains with HTTPS on ("automatic" or "manual") get all plain-HTTP traffic
 (hitting port 443 for one of these still works — the WAF/routing pipeline
 runs the same way — but you'll get a browser certificate warning, since only
 the edge's self-signed fallback cert is presented).
+
+## Wildcard domains
+
+Add `*.example.com` as a domain name (instead of a specific subdomain) to
+match *any* subdomain that doesn't already have its own exact entry —
+built for services that mint a subdomain per user/tenant. One entry
+handles all of them:
+
+- **Origin/cache/rate-limit config** is shared across every matching
+  subdomain — the origin app is expected to look at the `Host` header
+  itself to figure out which tenant it's serving (the standard pattern for
+  this kind of setup). Rate limiting is still tracked *per subdomain*
+  though, so one noisy tenant doesn't eat another's quota.
+- **WAF rules and IP/CIDR blocks** scoped to the wildcard domain in the
+  panel apply to every subdomain under it.
+- **DNS**: the panel creates a single `*.example.com` A record (in the
+  `example.com` zone) pointed at the edge — that one record makes every
+  subdomain resolve here, no DNS changes needed as new subdomains appear.
+- **HTTPS**: with mode set to **Automatic**, each subdomain gets issued
+  its own real Let's Encrypt certificate the first time it's actually
+  visited (HTTP-01 validates concrete hostnames fine — it just can't issue
+  the `*.` pattern itself — so this isn't a true wildcard cert, it's a
+  real one per subdomain, which needs no special ACME DNS-01 setup and
+  works out of the box). **Manual** mode works too, if you already have an
+  actual wildcard certificate from elsewhere (DNS-01 via another tool, or
+  purchased) — paste it once and it covers every subdomain.
+
+Only one level of wildcard is supported (`*.example.com` matches
+`foo.example.com`, not `foo.bar.example.com`), and an exact entry for a
+specific subdomain always takes priority over a wildcard if both exist.
 
 ## Panel login security
 
