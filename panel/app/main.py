@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .auth import hash_password
 from .config import get_settings
-from .db import Base, SessionLocal, engine
+from .db import Base, SessionLocal, engine, sync_schema
 from .models import AdminUser, Setting
 from .redis_sync import sync_all
 from .routers import auth, dashboard, dns, domains, logs, settings as settings_router, waf
@@ -41,6 +41,7 @@ async def redirect_unauthenticated(request, exc: StarletteHTTPException):
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    sync_schema()
 
     db = SessionLocal()
     try:
