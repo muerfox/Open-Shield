@@ -278,6 +278,12 @@ access** at `docker build` time:
   `lua-resty-auto-ssl`'s own `Makefile` would otherwise `curl` down. See
   `openresty/vendor/VERSIONS.md`.
 
+This isn't only a build-time concern, either: `panel/app/static/vendor/`
+has the panel's Pico.css/HTMX/Alpine.js (previously loaded from
+`cdn.jsdelivr.net`/`unpkg.com` on every page load), so the admin UI itself
+renders correctly with no internet access from wherever you're viewing it
+— see `panel/app/static/vendor/VERSIONS.md`.
+
 What's **not** vendored, and why: each Dockerfile's own OS package install
 (`apk add ...` for Alpine) still hits the base image's configured package
 mirror — vendoring raw `.apk`/`.deb` binaries into git is fragile (tightly
