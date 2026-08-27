@@ -91,6 +91,35 @@
     </label>
   </fieldset>
 
+  <fieldset>
+    <legend>Proxy limits</legend>
+    <small>
+      Unlike everything else here, these don't take effect instantly —
+      nginx doesn't support changing them live, so openresty regenerates a
+      small config file and reloads itself (zero-downtime) within ~20s of
+      saving.
+    </small>
+    <div class="grid">
+      <label for="proxy_connect_timeout_seconds">Connect timeout (s)
+        <input type="number" id="proxy_connect_timeout_seconds" name="proxy_connect_timeout_seconds" min="1" max="3600"
+               value="{{ domain.proxy_connect_timeout_seconds if domain else 60 }}">
+      </label>
+      <label for="proxy_send_timeout_seconds">Send timeout (s)
+        <input type="number" id="proxy_send_timeout_seconds" name="proxy_send_timeout_seconds" min="1" max="3600"
+               value="{{ domain.proxy_send_timeout_seconds if domain else 60 }}">
+      </label>
+      <label for="proxy_read_timeout_seconds">Read timeout (s)
+        <input type="number" id="proxy_read_timeout_seconds" name="proxy_read_timeout_seconds" min="1" max="3600"
+               value="{{ domain.proxy_read_timeout_seconds if domain else 60 }}">
+        <small>Bump this for slow endpoints (report generation, heavy APIs) or long-lived WebSocket connections.</small>
+      </label>
+    </div>
+    <label for="max_body_size_mb">Max upload/request body size (MB, 0 = unlimited)
+      <input type="number" id="max_body_size_mb" name="max_body_size_mb" min="0" max="10240"
+             value="{{ domain.max_body_size_mb if domain else 20 }}">
+    </label>
+  </fieldset>
+
   <button type="submit">{% if domain %}Save{% else %}Add domain{% endif %}</button>
   <a href="/domains" role="button" class="secondary outline">Cancel</a>
 </form>

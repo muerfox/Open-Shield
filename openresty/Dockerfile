@@ -47,7 +47,7 @@ RUN openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 \
     -keyout /etc/ssl/resty-auto-ssl-fallback.key \
     -out /etc/ssl/resty-auto-ssl-fallback.crt
 
-RUN mkdir -p /var/cache/openresty/edge /etc/openresty/conf.d /etc/openresty/lua
+RUN mkdir -p /var/cache/openresty/edge /etc/openresty/conf.d /etc/openresty/conf.d/generated /etc/openresty/lua
 
 COPY nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
 COPY conf.d/ /etc/openresty/conf.d/

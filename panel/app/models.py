@@ -71,6 +71,18 @@ class Domain(Base):
     rate_limit_requests: Mapped[int] = mapped_column(Integer, default=100)
     rate_limit_window_seconds: Mapped[int] = mapped_column(Integer, default=10)
 
+    # None of these nginx directives accept variables, so — unlike
+    # everything else here — changing them doesn't take effect instantly;
+    # openresty regenerates a small per-domain config file and reloads
+    # itself (zero-downtime) within ~20s of a change. Defaults match
+    # nginx's own stock behavior (60s timeouts) / the previous fixed
+    # global client_max_body_size (20m), so leaving these untouched keeps
+    # existing behavior unchanged.
+    proxy_connect_timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    proxy_send_timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    proxy_read_timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    max_body_size_mb: Mapped[int] = mapped_column(Integer, default=20)  # 0 = unlimited
+
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     waf_rules: Mapped[list["WafRule"]] = relationship(back_populates="domain", cascade="all, delete-orphan")

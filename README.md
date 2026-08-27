@@ -29,6 +29,7 @@ request.
 - 📴 **Builds offline** — every Python/Lua dependency is vendored and hash-verified; `docker build` never touches PyPI, GitHub, or luarocks.org.
 - 📊 **Live dashboard** — recent WAF events, block counts, all polling live via HTMX.
 - 🎨 **Branded error pages** — WAF blocks, rate limits, unknown domains, and origin-down errors all get a custom dark-themed Open-Shield page (never a real origin's own 4xx/5xx, which always pass through untouched).
+- ⏱️ **Per-domain proxy tuning** — connect/send/read timeouts and max body size, plus working WebSocket support.
 
 ## Quick start
 
@@ -204,6 +205,33 @@ handles all of them:
 Only one level of wildcard is supported (`*.example.com` matches
 `foo.example.com`, not `foo.bar.example.com`), and an exact entry for a
 specific subdomain always takes priority over a wildcard if both exist.
+
+## Proxy timeouts & body size
+
+Each domain has connect/send/read timeouts (seconds) and a max
+request/upload body size (MB, `0` = unlimited) on its form — bump these
+for slow endpoints, long-lived WebSocket connections, or large uploads
+that would otherwise hit nginx's 60s/20MB defaults.
+
+This is the **one** setting in Open-Shield that isn't instant. nginx
+doesn't support driving `proxy_connect_timeout`/`proxy_send_timeout`/
+`proxy_read_timeout`/`client_max_body_size` from a variable — they're
+config-time-only directives (checked directly against nginx's own docs)
+— so there's no way to read them from Redis per-request the way
+everything else here works. Instead, `openresty/lua/domain_limits.lua`
+regenerates a small config file from Redis and triggers a graceful
+`nginx -s reload` (new workers with the new config, old ones drained, zero
+downtime) whenever it changes — checked every 20s. Domains left on the
+default settings don't get a generated block at all and keep using the
+shared catch-all server blocks, so this stays a no-op for most domains.
+nginx validates the generated config before reloading, so a bad value
+can't take the edge down — worst case, the old config keeps running and
+the change just doesn't apply until it's fixed.
+
+WebSocket connections also now work through the proxy (an earlier version
+of the shared proxy config hardcoded `Connection: ""`, which silently
+broke every WebSocket upgrade) — if you run something long-lived over a
+WebSocket, raise that domain's read timeout accordingly.
 
 ## Panel login security
 

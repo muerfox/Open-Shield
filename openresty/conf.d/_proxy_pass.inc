@@ -23,7 +23,13 @@ proxy_set_header Host $host;
 proxy_set_header X-Real-IP $remote_addr;
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header Connection "";
+# WebSocket support (map defined in nginx.conf): forwards the Upgrade
+# handshake through instead of the previous hardcoded Connection "",
+# which silently broke every WebSocket connection. Long-lived/idle
+# WebSocket connections may also want a longer proxy_read_timeout than
+# the 60s default — configurable per domain (see the domain form).
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection $connection_upgrade;
 
 proxy_cache edge_cache;
 proxy_cache_key $scheme$host$request_uri;

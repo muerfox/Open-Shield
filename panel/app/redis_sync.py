@@ -40,6 +40,10 @@ def sync_domain(domain: Domain) -> None:
             "rate_limit_enabled": "1" if domain.rate_limit_enabled else "0",
             "rate_limit_requests": str(domain.rate_limit_requests),
             "rate_limit_window": str(domain.rate_limit_window_seconds),
+            "proxy_connect_timeout": str(domain.proxy_connect_timeout_seconds),
+            "proxy_send_timeout": str(domain.proxy_send_timeout_seconds),
+            "proxy_read_timeout": str(domain.proxy_read_timeout_seconds),
+            "max_body_size_mb": str(domain.max_body_size_mb),
         },
     )
     r.sadd("domains:index", name)

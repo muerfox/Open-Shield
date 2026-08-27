@@ -77,6 +77,15 @@ def _validate_ssl(ssl_mode: str, ssl_cert: str, ssl_key: str) -> str | None:
     return None
 
 
+def _validate_proxy_limits(connect: int, send: int, read: int, max_body_mb: int) -> str | None:
+    for label, value in (("Connect timeout", connect), ("Send timeout", send), ("Read timeout", read)):
+        if not (1 <= value <= 3600):
+            return f"{label} must be between 1 and 3600 seconds."
+    if not (0 <= max_body_mb <= 10240):
+        return "Max body size must be between 0 (unlimited) and 10240 MB."
+    return None
+
+
 def _resolve_ssl_fields(
     ssl_mode: str, ssl_cert: str, ssl_key: str, existing: Domain | None
 ) -> tuple[str | None, str | None]:
@@ -122,6 +131,10 @@ def create_domain(
     rate_limit_enabled: bool = Form(False),
     rate_limit_requests: int = Form(100),
     rate_limit_window_seconds: int = Form(10),
+    proxy_connect_timeout_seconds: int = Form(60),
+    proxy_send_timeout_seconds: int = Form(60),
+    proxy_read_timeout_seconds: int = Form(60),
+    max_body_size_mb: int = Form(20),
 ):
     name = name.lower().strip().rstrip(".")
 
@@ -150,6 +163,14 @@ def create_domain(
             request, "domains/form.html", {"user": user, "domain": None, "error": ssl_error}, status_code=400
         )
 
+    limits_error = _validate_proxy_limits(
+        proxy_connect_timeout_seconds, proxy_send_timeout_seconds, proxy_read_timeout_seconds, max_body_size_mb
+    )
+    if limits_error:
+        return templates.TemplateResponse(
+            request, "domains/form.html", {"user": user, "domain": None, "error": limits_error}, status_code=400
+        )
+
     domain = Domain(
         name=name,
         origin_scheme=origin_scheme,
@@ -165,6 +186,10 @@ def create_domain(
         rate_limit_enabled=rate_limit_enabled,
         rate_limit_requests=rate_limit_requests,
         rate_limit_window_seconds=rate_limit_window_seconds,
+        proxy_connect_timeout_seconds=proxy_connect_timeout_seconds,
+        proxy_send_timeout_seconds=proxy_send_timeout_seconds,
+        proxy_read_timeout_seconds=proxy_read_timeout_seconds,
+        max_body_size_mb=max_body_size_mb,
     )
     db.add(domain)
     db.commit()
@@ -203,6 +228,10 @@ def update_domain(
     rate_limit_enabled: bool = Form(False),
     rate_limit_requests: int = Form(100),
     rate_limit_window_seconds: int = Form(10),
+    proxy_connect_timeout_seconds: int = Form(60),
+    proxy_send_timeout_seconds: int = Form(60),
+    proxy_read_timeout_seconds: int = Form(60),
+    max_body_size_mb: int = Form(20),
 ):
     domain = _get_domain_or_404(db, domain_id)
 
@@ -211,6 +240,14 @@ def update_domain(
     if ssl_error:
         return templates.TemplateResponse(
             request, "domains/form.html", {"user": user, "domain": domain, "error": ssl_error}, status_code=400
+        )
+
+    limits_error = _validate_proxy_limits(
+        proxy_connect_timeout_seconds, proxy_send_timeout_seconds, proxy_read_timeout_seconds, max_body_size_mb
+    )
+    if limits_error:
+        return templates.TemplateResponse(
+            request, "domains/form.html", {"user": user, "domain": domain, "error": limits_error}, status_code=400
         )
 
     domain.origin_scheme = origin_scheme
@@ -226,6 +263,10 @@ def update_domain(
     domain.rate_limit_enabled = rate_limit_enabled
     domain.rate_limit_requests = rate_limit_requests
     domain.rate_limit_window_seconds = rate_limit_window_seconds
+    domain.proxy_connect_timeout_seconds = proxy_connect_timeout_seconds
+    domain.proxy_send_timeout_seconds = proxy_send_timeout_seconds
+    domain.proxy_read_timeout_seconds = proxy_read_timeout_seconds
+    domain.max_body_size_mb = max_body_size_mb
     db.commit()
     db.refresh(domain)
 
