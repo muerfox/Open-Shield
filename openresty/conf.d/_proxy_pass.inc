@@ -15,6 +15,10 @@ header_filter_by_lua_block {
 }
 
 proxy_http_version 1.1;
+# Fires error_page (_error_page.inc) for a real 5xx *response* from the
+# origin too, not just a connection-level failure to reach it — see that
+# file for exactly which codes and why nothing else is affected.
+proxy_intercept_errors on;
 proxy_set_header Host $host;
 proxy_set_header X-Real-IP $remote_addr;
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

@@ -42,6 +42,11 @@ function _M.render(status, custom_message)
     ngx.status = status
     ngx.header["Content-Type"] = "text/html; charset=utf-8"
     ngx.header["Cache-Control"] = "no-store"
+    -- Set directly here too: an @edge_error internal redirect (from
+    -- proxy_intercept_errors, see conf.d/_error_page.inc) bypasses the
+    -- header_filter_by_lua_block in _proxy_pass.inc that rebrands this on
+    -- the normal proxied-response path.
+    ngx.header["Server"] = "OpenShield"
 
     ngx.say([[<!doctype html>
 <html lang="en">
